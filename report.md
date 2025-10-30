@@ -72,7 +72,7 @@ This database is used for creating pattern recognition methods with machine lear
 > ```git checkout -b gina_milestone1```
 <br>
 
-### Clone & commit python file:**
+### Clone & commit python file:
 
 - Cloned to GitHub using curl (curl chosen because only needed the one document, not whole repository. Otherwise would have used git clone.)<p>
 
@@ -223,3 +223,8 @@ A Convolutional Neural Network (CNN) or "convnet" as seen in the code when it us
 
 The problem is a pattern recognition problem so you need a model that can learn spatial features from images.
 A simpler machine learning model wouldn't work because you need someone to manually engine the features which is too complex. A neural network learns the features independently.
+
+## 6. Add documentation file
+
+README.md updated and pushed.
+
