@@ -1,5 +1,4 @@
 <<<<<<< HEAD
-<<<<<<< HEAD
 absl-py==2.3.1
 astunparse==1.6.3
 certifi==2025.10.5
@@ -48,8 +47,3 @@ numpy
 keras 
 tensorflow #additionaly needed in my case
 >>>>>>> 9c65e0e (Summary of what was done in this commit:)
-=======
-numpy 
-keras 
-tensorflow #additionaly needed in my case
->>>>>>> 9c65e0e8cbe8bf3d3f7a528f9e6d06a6f3d619f9
