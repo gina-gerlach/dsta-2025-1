@@ -1,43 +1,50 @@
 # dsta-2025-1
-Datascience Toolkits and Architectures
 
-Gina Gerlach
+**Course:** Data Science Toolkits and Architectures  
+**Authors:** Gina Gerlach & Sven Regli  
 
-This project trains a Convolutional Neural Network (CNN) to recognize handwritten digits (0–9) from the MNIST dataset.  
+This project trains a **Convolutional Neural Network (CNN)** to recognize handwritten digits (0–9) from the MNIST dataset.  
 The model achieves around 99% test accuracy after training.
 
-## Overview
+## Project structure
+```
+dsta-2025-1/
+├── .gitignore
+├── src/
+│   └── models/
+│       ├── __init__.py
+│       └── mnist_convnet.py
+├── report/
+│   └── report.md
+├── requirements.txt
+└── README.md
 
-The MNIST dataset consists of 70,000 grayscale images of handwritten digits (28×28 pixels each).  
-
-This code:
-
-1. Loads and preprocesses the dataset
-
-2. Builds a CNN with Keras
-
-3. Trains the model on the training data
-
-4. Evaluates its performance on the test data
-
-
+```
 ## Requirements
 
-Make sure you have the following installed:
+Before running the project, ensure the following are installed:
 
-- Python 3.10  and -pip -venv
+- **Python 3.10+**
+- **pip** (Python package manager)
+- **venv** (for virtual environments)
+- **Git** (for version control)
 
-- Git
+### Install dependencies
 
-> ```sudo apt install -y python3 python3-pip git python3-venv```
+Create and activate a virtual environment (recommended):
 
-- Keras
+```bash
+python3 -m venv venv
+source venv/bin/activate   # macOS / Linux
+# or
+.venv\Scripts\activate     # Windows PowerShell
+```
 
-- TensorFlow
+then install the requirements packages:
 
-- NumPy
-
-> ```pip install tensorflow keras numpy```
+ ``` bash
+ pip install -r requirements.txt
+ ```
 
 ## Run the code
 
@@ -45,10 +52,17 @@ To run follow the process below:
 
 1. Clone the repository
 
-> ```git clone git@github.com:gina-gerlach/dsta-2025-1```
+``` bash
+git clone git@github.com:gina-gerlach/dsta-2025-1
+```
 
-> ```cd dsta-2025-1```
+As the file is in the src folder change the directory to **src/models/**
+``` bash
+cd dsta-2025-1/src/models/
+```
 
 2. Run the script
 
-> ```python mnist_convnet.py```
+``` bash
+python mnist_convnet.py
+```
