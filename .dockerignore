@@ -8,3 +8,5 @@ __pycache__
 models
 *.h5
 .env
+report/
+

@@ -2,6 +2,7 @@ from tensorflow import keras
 from .load_data import load_mnist_data
 from .create_model import create_model
 
+
 def train_model(epochs=5, batch_size=128):
     # Load data
     (x_train, y_train), (x_test, y_test) = load_mnist_data()

@@ -1,13 +1,12 @@
 import numpy as np
 from tensorflow import keras
 
-
 # Model / data parameters
-num_classes = 10
-input_shape = (28, 28, 1)
+NUM_CLASSES = 10
+INPUT_SHAPE = (28, 28, 1)
+
 
 def load_mnist_data():
-
     # Load the data and split it between train and test sets
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
 
@@ -20,3 +19,9 @@ def load_mnist_data():
     print("x_train shape:", x_train.shape)
     print(x_train.shape[0], "train samples")
     print(x_test.shape[0], "test samples")
+
+    # Convert class vectors to binary class matrices
+    y_train = keras.utils.to_categorical(y_train, NUM_CLASSES)
+    y_test = keras.utils.to_categorical(y_test, NUM_CLASSES)
+
+    return (x_train, y_train), (x_test, y_test)

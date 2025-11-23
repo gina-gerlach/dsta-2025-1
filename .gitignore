@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Large datasets / ML model files
+*.csv
+*.zip
+*.h5
+*.npz
+*.pt
+*.pth
+checkpoints/
+data/
+datasets/

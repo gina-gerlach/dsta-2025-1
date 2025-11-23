@@ -1,4 +1,3 @@
-import os
 from tensorflow import keras
 from tensorflow.keras import layers
 
@@ -25,5 +24,3 @@ def create_model():
         metrics=["accuracy"],
     )
     return model
-
-

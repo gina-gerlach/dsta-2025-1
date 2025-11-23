@@ -396,3 +396,28 @@ git push origin milestone_1
 To be defined
 ---
 
+Milestone 2 focused on the development of a Dockerization of the project and to split the single mnist_convnet.py file into reusable modules. We split the 6 Tasks among us and documented each Task using issues on Github.
+
+Task 3: 
+Task 3 had these objectives: 
+Make sure your code has the following functionality (extend if necessary):
+
+
+Can load data
+
+Can train (fit) a neural network on the data
+
+Can save a fitted model to a ".h5" file (or saved model type for newer Tensorflow 2.0 versions)
+
+- Can load a ".h5" file, using Keras (or saved model type for newer Tensorflow 2.0 versions)
+
+Can perform predictions using a "fitted" model, using Keras
+
+This was done by splitting the mnnits_convnet.py into 3 Modules: 
+- create_model.py
+This module consits of only one function, which creates the model, the model itself is the same as before. 
+- load_data.py 
+This Module imports the mnist data set and does the preprocessing (splitting into training and testing sets)
+- train_model.py
+
+
