@@ -21,7 +21,7 @@
 - [11. Tag and Release](#11-tag-and-release)
 ...
 * **Milestone 2:**
-- [12. .gitignore Update and Repository Cleanliness](#12-gitignore-update-and-repository-cleanliness)
+- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branc-and-update)
 - [13. Dependency Management and Requirements File](#13-dependency-management-and-requirements-file)
 - [14. Virtual Environment Workflow](#14-virtual-environment-workflow)
 - [15. Hash Functions and Python Packaging Concepts](#15-hash-functions-and-python-packaging-concepts)
