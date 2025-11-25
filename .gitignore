@@ -205,3 +205,38 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Large datasets / ML model files
+*.csv
+*.zip
+*.h5
+*.npz
+*.pt
+*.pth
+checkpoints/
+data/
+datasets/
+
+# Media / assets
+media/
+assets/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mp3
+
+# OS-specific system files
+# Windows
+Thumbs.db
+desktop.ini
+
+# macOS
+.DS_Store
+
+# Ubuntu / Linux
+*~
+.nfs*
+.Trash-*

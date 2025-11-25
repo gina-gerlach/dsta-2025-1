@@ -1,0 +1,38 @@
+"""Data loading and preprocessing module for MNIST dataset."""
+import numpy as np
+from tensorflow import keras
+
+# Model / data parameters
+NUM_CLASSES = 10
+INPUT_SHAPE = (28, 28, 1)
+
+
+def load_mnist_data():
+    """
+    Load and preprocess the MNIST dataset.
+
+    Returns:
+        tuple: ((x_train, y_train), (x_test, y_test))
+            - x_train: Training images (normalized, (n, 28, 28, 1))
+            - y_train: Training labels (one-hot encoded)
+            - x_test: Test images (normalized, (n, 28, 28, 1))
+            - y_test: Test labels (one-hot encoded)
+    """
+    # Load the data and split it between train and test sets
+    (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+
+    # Scale images to the [0, 1] range
+    x_train = x_train.astype("float32") / 255
+    x_test = x_test.astype("float32") / 255
+    # Make sure images have shape (28, 28, 1)
+    x_train = np.expand_dims(x_train, -1)
+    x_test = np.expand_dims(x_test, -1)
+    print("x_train shape:", x_train.shape)
+    print(x_train.shape[0], "train samples")
+    print(x_test.shape[0], "test samples")
+
+    # Convert class vectors to binary class matrices
+    y_train = keras.utils.to_categorical(y_train, NUM_CLASSES)
+    y_test = keras.utils.to_categorical(y_test, NUM_CLASSES)
+
+    return (x_train, y_train), (x_test, y_test)
