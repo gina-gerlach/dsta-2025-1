@@ -15,11 +15,11 @@ def main():
 
     # Save model
     print("\nSaving model...")
-    save_model(model, filepath='mnist_model.h5')
+    save_model(model)
 
     # Load model
     print("\nLoading model...")
-    loaded_model = load_model(filepath='mnist_model.h5')
+    loaded_model = load_model()
 
     # Predict
     print("\nMaking predictions...")

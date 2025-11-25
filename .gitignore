@@ -217,3 +217,26 @@ __marimo__/
 checkpoints/
 data/
 datasets/
+
+# Media / assets
+media/
+assets/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mp3
+
+# OS-specific system files
+# Windows
+Thumbs.db
+desktop.ini
+
+# macOS
+.DS_Store
+
+# Ubuntu / Linux
+*~
+.nfs*
+.Trash-*
