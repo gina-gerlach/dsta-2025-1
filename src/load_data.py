@@ -1,3 +1,4 @@
+"""Data loading and preprocessing module for MNIST dataset."""
 import numpy as np
 from tensorflow import keras
 
@@ -7,6 +8,16 @@ INPUT_SHAPE = (28, 28, 1)
 
 
 def load_mnist_data():
+    """
+    Load and preprocess the MNIST dataset.
+
+    Returns:
+        tuple: ((x_train, y_train), (x_test, y_test))
+            - x_train: Training images (normalized, (n, 28, 28, 1))
+            - y_train: Training labels (one-hot encoded)
+            - x_test: Test images (normalized, (n, 28, 28, 1))
+            - y_test: Test labels (one-hot encoded)
+    """
     # Load the data and split it between train and test sets
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
 

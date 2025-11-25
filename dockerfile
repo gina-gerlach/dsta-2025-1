@@ -15,4 +15,10 @@ RUN uv pip install --system --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY main.py .
 
+# Create directory for model persistence
+RUN mkdir -p /app/models
+
+# Set the volume mount point
+VOLUME ["/app/models"]
+
 CMD ["python", "main.py"]

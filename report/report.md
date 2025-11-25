@@ -543,6 +543,7 @@ COPY src/ src/
 
 CMD ["python", "main.py"]
 ```
+We used copy src/src/ to preserve the structure of our build, to ensure the import in main.py `from src.train_model import train_model` are working correctly. 
 
 Since TensorFlow is a large library, this approach took considerable time until everything was installed and built—initially around 4 minutes per build.
 
@@ -563,7 +564,7 @@ COPY requirements.txt .
 # Install deps into the system Python inside the container
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
-# Copy the source code and main.py
+# Copy the source code and main.py 
 COPY src/ src/
 COPY main.py .
 

@@ -1,10 +1,17 @@
-from src.train_model import (train_model)
+"""
+MNIST CNN Training and Prediction Pipeline.
+
+This script trains a convolutional neural network on the MNIST dataset,
+saves the model, and demonstrates prediction on test samples.
+"""
+from src.train_model import train_model
 from src.load_data import load_mnist_data
 from src.model_io import save_model, load_model
 from src.predict import predict_classes
 
 
 def main():
+    """Execute the complete MNIST training and prediction pipeline."""
     # Load data
     print("Loading data...")
     (x_train, y_train), (x_test, y_test) = load_mnist_data()
@@ -15,11 +22,11 @@ def main():
 
     # Save model
     print("\nSaving model...")
-    save_model(model, filepath='mnist_model.h5')
+    save_model(model)
 
     # Load model
     print("\nLoading model...")
-    loaded_model = load_model(filepath='mnist_model.h5')
+    loaded_model = load_model()
 
     # Predict
     print("\nMaking predictions...")
