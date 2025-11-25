@@ -9,16 +9,21 @@ The model achieves around 99% test accuracy after training.
 ## Project structure
 ```
 dsta-2025-1/
+├── .dockerignore
 ├── .gitignore
-├── src/
-│   └── models/
-│       ├── __init__.py
-│       └── mnist_convnet.py
+├── Dockerfile
+├── main.py
+├── README.md
+├── requirements.txt
 ├── report/
 │   └── report.md
-├── requirements.txt
-└── README.md
-
+└── src/
+    ├── __init__.py
+    ├── create_model.py
+    ├── load_data.py
+    ├── model_io.py
+    ├── predict.py
+    └── train_model.py
 ```
 ## Requirements
 
@@ -28,41 +33,34 @@ Before running the project, ensure the following are installed:
 - **pip** (Python package manager)
 - **venv** (for virtual environments)
 - **Git** (for version control)
+- **Docker** (for reproducability across machines)
 
-### Install dependencies
+## Update 25.11.2025 - Dockerized Workflow
 
-Create and activate a virtual environment (recommended):
+### 1. Clone the repository at the release tag
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # macOS / Linux
-# or
-.venv\Scripts\activate     # Windows PowerShell
+git clone https://github.com/gina-gerlach/dsta-2025-1.git
+cd dsta-2025-1
+git checkout main 
 ```
 
-then install the requirements packages:
+### 2. Build the Docker image
 
- ``` bash
- pip install -r requirements.txt
- ```
-
-## Run the code
-
-To run follow the process below:
-
-1. Clone the repository
-
-``` bash
-git clone git@github.com:gina-gerlach/dsta-2025-1
+```bash
+docker build -t dsta-mnist:latest .
 ```
 
-As the file is in the src folder change the directory to **src/models/**
-``` bash
-cd dsta-2025-1/src/models/
+### 3. Run the container
+
+```bash
+docker run --rm -it dsta-mnist:latest
 ```
 
-2. Run the script
+### Results:
+- MNIST dataset downloads automatically
+- Neural network is trained and evaluated
+- Model is saved and loaded inside the container
+- Predictions are printed for sample test images
 
-``` bash
-python mnist_convnet.py
-```
+Note: No virtual environment or additional setup is needed; Docker handles all dependencies.
