@@ -23,7 +23,7 @@
 - [14. Code Modularization and Refactoring](#14-code-modularization-and-refactoring)
 - [15. pip Requirement File and Virtual Environment](#15-pip-requirement-file-and-virtual-environment)
 - [16. Dockerization](#16-dockerization)
-- [17. Issues and how they were solved](#17-issues-and-how-they-were-solved)
+- [17. Testing "Dockerized" Code](#17-testing-dockerized-code)
 - [18. Tag and Release](#18-tag-and-release)
 
 
@@ -432,6 +432,13 @@ git checkout feature_branch
 git rebase dev
 ```
 
+An issue arose when updating a feature branch after many commits had been made. Instead of using rebase, which requires you resolve conflicts on each commit, we used merge at that time. Then conflicts only had to be resolved once
+
+```bash
+git checkout feature_branch
+git merge dev
+```
+
 At this time, the following entries were added:
 
 | Group | File Types | Notes |
@@ -733,3 +740,34 @@ UV is a super fast replacement for pip, built in Rust, which allows for faster d
 
 **Why UV/Python 3.12 and not the TensorFlow image?**
 We used the Python 3.12-slim ( an official Image by Docker) image to speed up installations, as the TensorFlow image itself is already huge (around 3GB). Adding a `.dockerignore` file was essential to prevent the image from growing even larger. We excluded items like `.venv` and the `report` directory from the Docker context,not only to save space but mainly to avoid including unnecessary files in the image. The image only needs the `src` directory and `main.py` file to run and the requirements.txt for dependencies. 
+
+## 17. Testing "Dockerized" Code
+
+On Gina's setup the "dockerized" code was tested prior to merging to main branch.
+From the feature branch:
+
+1. Build the Docker image
+
+```bash
+docker build -t data-mnist:latest .
+```
+
+The Docker image was built successfully with no errors. After this we ran the container with -it to show the outputs to verify the code worked, and  —rm to remove the container after it finished.
+
+```bash
+docker run --rm -it dsta-mnist:latest
+```
+
+The output showed that the dataset loaded, the neural network trained for 5 epochs, the model was evaluated on the test set, the model was saved as a .h5 file in the container, the model was loaded back correctly and run. The final predictions were accurate on unseen data. 
+
+## 18. Tag and Release
+Finally, the ReadMe was updated with the current project structure and Docker workflow to run the code.
+
+After merging into `main`, a release tag was created for grading:
+
+```bash
+git tag milestone_2
+git push origin milestone_2
+```
+>  **Milestone 2 Summary:**  
+> Both team members successfully modularized the MNIST CNN code, created a fully reproducible Dockerized workflow, and ensured the pipeline runs end-to-end (training, saving/loading the model, and performing inference) across any system.
