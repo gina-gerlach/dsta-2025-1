@@ -3,6 +3,7 @@
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
+**Milestone 3** 
 
 ## Table of Contents
 * **Milestone 1:**
@@ -25,7 +26,9 @@
 - [16. Dockerization](#16-dockerization)
 - [17. Testing "Dockerized" Code](#17-testing-dockerized-code)
 - [18. Tag and Release](#18-tag-and-release)
-
+...
+* **Milestone 3:**
+- [19. Docker-compose installation and questions](#19-Docker-compose-installation-and-questions)
 
 ---
 # Milestone 1
@@ -771,3 +774,36 @@ git push origin milestone_2
 ```
 >  **Milestone 2 Summary:**  
 > Both team members successfully modularized the MNIST CNN code, created a fully reproducible Dockerized workflow, and ensured the pipeline runs end-to-end (training, saving/loading the model, and performing inference) across any system.
+
+---
+# Milestone 3
+
+## 19. Docker-compose installation and questions
+
+Docker-compose version v2.40.3 was installed
+
+### Which services are being used for the application (described in the link above)? How do they relate to the host names in terms of computer networks?
+
+The Compose file defines two services: `web` and `redis`. 
+`web` runs a Flask application. It handles HTTP requests from the browser and for each request calls Redis to increment a counter. 
+`redis` is the server or database. It stores the counter value and listens for connections from web on its default port 6379.
+
+Each service runs in its own container and Docker configures an internal network where each container is reachable by a hostname that’s identical to its service name. 
+
+So, `web` connects to the `redis` service using the hostname `redis` on port 6379, just like computers on a normal network use hostnames to read each other.
+ 
+### What ports are being used (within the application and in the docker-compose file)?
+
+|   | **application**  | **docker-compose**  |
+|:---|:---|:---|
+| `web`  | 5000 (default port for Flask web server)  | 8000:5000 (host port:container port) | 
+| `redis`  | 6379 (default port)  | N/A redis doesn’t talk directly with host computers  |
+
+### How does the host machine (e.g. your computer) communicate with the application inside the
+Docker container. Which ports are exposed from the application to the host machine?
+
+The host machine communicates with the Flask app via the mapped ports listed above (8000:5000). The application listens on port 5000 inside the web container while Docker forwards traffic from localhost:8000 to the internal port 5000. That way when you open http:localhost:8000/ in a browser the request reaches the Flask app inside the container. The only port exposed from the application to the host in this example is host port 8000 mapped to container port 5000 on the web service.
+
+### What is localhost, why is it useful in the domain of web applications?
+
+`localhost` is the standard hostname that refers to the local machine. It’s useful because it allows you to test web applications locally before deploying them to remote servers.
