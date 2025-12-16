@@ -4,7 +4,7 @@
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
-**Milestone 3** focuses on multi docker applications and PostgresDB
+**Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 ## Table of Contents
 * **Milestone 1:**
@@ -20,14 +20,19 @@
 - [11. Tag and Release](#11-tag-and-release)
 ...
 * **Milestone 2:**
-- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branc-and-update)
+- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branch-and-update)
 - [13. Conceptual Questions](#13-conceptual-questions)
-- [14. Task 3 - Change Title](#14)
-- [15. Task 4 - Change Title](#15)
-- [16. Task 5 - Change Title](#16)
-- [17. Task 6 - Change Title](#17)
+- [14. Code Modularization and Refactoring](#task-3-code-modularization-and-refactoring)
+- [15. pip Requirement File and Virtual Environment](#15-pip-requirement-file-and-virtual-environment)
+- [16. Dockerization](#dockerization)
+- [17. Testing "Dockerized" Code](#17-testing-dockerized-code)
+- [18. Tag and Release](#18-tag-and-release)
 
 * **Milestone 3:**
+- [Task 3: Image Storage in PostgreSQL](#task-3-image-storage-in-postgresql)
+  - [The Impedance Mismatch Problem](#the-impedance-mismatch-problem)
+  - [MNIST Dataset Structure](#mnist-dataset-structure)
+  - [Database Table Design](#database-table-design)
 - [Task 4: Multi-Docker Container Application](#task-4-multi-docker-container-application)
   - [Architecture Overview](#architecture-overview)
   - [Database Schema](#database-schema)
@@ -680,6 +685,151 @@ PyPI, or the Python Package Index, is the central repository for Python software
 - Documentation: Should have a README, Application Programming Interface (API) docs, and usage examples/tutoritals.
 
 # Milestone 3
+
+## Task 3: Image Storage in PostgreSQL
+
+Task 3 explores how to store image data in a relational database like PostgreSQL, addressing the "impedance mismatch" problem between object-oriented representations (NumPy arrays) and relational tables.
+
+### Question 1: Dataset Structure
+
+**How is the MNIST data structured?**
+
+The MNIST dataset contains 70,000 28×28 pixel grayscale images. They can be loaded as NumPy arrays with Keras:
+
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+
+**Dataset characteristics:**
+- Training samples: 60,000 images
+- Test samples: 10,000 images
+- Image shape: 28×28×1 (height × width × channels)
+- Pixel values: Normalized float32 in range [0, 1]
+- Labels: Integer 0-9 representing digits
+
+### Question 2: Database Table Design
+
+**How would you define relational database tables to save your data? What kind of data types could you use?**
+
+To store MNIST images in PostgreSQL, we use binary serialization. Images need to be converted to BYTEA (binary data) using serialization, then reversed on retrieval. NumPy's serialization (`np.save()`) provides an effective way to transform image arrays into bytes.
+
+#### Basic Table Schema
+
+| Attribute | Data Type | Purpose |
+|-----------|-----------|---------|
+| `id` | `SERIAL PRIMARY KEY` | Auto-incrementing unique identifier for each image |
+| `image_data` | `BYTEA` | Binary storage of serialized NumPy array (28×28 image) |
+| `true_label` | `INTEGER` | The actual digit (0-9) in the image |
+| `image_shape` | `VARCHAR(50)` | Shape metadata for validation (e.g., "(28, 28, 1)") |
+| `created_at` | `TIMESTAMP` | Timestamp when the image was inserted |
+
+**Why BYTEA?**
+This approach is more efficient than flattening into 784 individual columns or storing as text.
+
+### Question 3: Additional Attributes for Querying
+
+**What additional attributes might make sense to easily query your data (e.g., find all pictures of digit 7)?**
+
+Additional attributes that may assist in query may be:
+
+| *Attribute*  | *Data Type*  | *Purpose*  | *Example* |
+|---|---|---|---|
+| dataset_split  | TEXT  | Indicate if image is training or test set | Find only train images |
+| label | INTEGER  | 0-9 digit class | Find all 7s |
+| image_index  | INTEGER | Original dataset index  | Track original dataset position |
+
+### The Impedance Mismatch Problem
+
+The "impedance mismatch" problem occurs when trying to store object-oriented or array-based data (like images in Python) into relational databases (which use tables with rows and columns). This is similar to the serialization/deserialization process used when transmitting data over networks.
+
+#### How to Represent/Transform Image Data for Relational Databases
+
+**Problem:**
+- Python/NumPy represents images as multi-dimensional arrays (e.g., 28×28×1 for MNIST)
+- PostgreSQL stores data in tabular format with specific data types
+- Direct storage of NumPy arrays is not possible
+
+**Solution: Binary Serialization**
+
+We transform image data using the following approach:
+
+1. **Serialization (Python → Database):**
+   ```python
+   def serialize_image(image_array: np.ndarray) -> bytes:
+       buffer = io.BytesIO()
+       np.save(buffer, image_array)
+       return buffer.getvalue()
+   ```
+   - Convert NumPy array to bytes using NumPy's built-in serialization
+   - Store in PostgreSQL `BYTEA` (binary data) column
+
+2. **Deserialization (Database → Python):**
+   ```python
+   def deserialize_image(image_bytes: bytes) -> np.ndarray:
+       buffer = io.BytesIO(image_bytes)
+       return np.load(buffer, allow_pickle=False)
+   ```
+   - Retrieve bytes from database
+   - Reconstruct NumPy array using NumPy's load function
+
+**Alternative Approaches:**
+- **JSON encoding:** Convert array to JSON (less efficient for large arrays)
+- **Base64 encoding:** Encode bytes as text but this is less efficient
+- **External file storage:** Store images as files, reference paths in database
+- **Specialized databases:** Use PostgreSQL extensions like `cube` or dedicated image databases
+
+
+**How Data is Loaded:**
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+- Downloaded automatically from Keras
+- Cached locally for subsequent runs
+- Preprocessed: normalized and reshaped
+
+### Database Table Design
+
+#### PostgreSQL Data Types Used
+
+| Data Type | Usage | Rationale |
+|-----------|-------|-----------|
+| `SERIAL` | Primary keys (`id`) | Auto-incrementing integer, ensures uniqueness |
+| `BYTEA` | Image data, probability arrays | Binary data storage for serialized NumPy arrays |
+| `INTEGER` | Labels, predictions | Digit classification (0-9) |
+| `REAL` | Confidence scores | Floating-point for probability values |
+| `VARCHAR(50)` | Image shape metadata | Store shape as string for validation |
+| `TIMESTAMP` | Creation timestamps | Track when data was inserted |
+
+#### Table Attributes for Querying
+
+**Indexes for Performance:**
+```sql
+-- Find all images of a specific digit
+CREATE INDEX idx_input_data_label ON input_data(true_label);
+
+-- Find predictions for a specific digit
+CREATE INDEX idx_predictions_label ON predictions(predicted_label);
+
+-- Link predictions to input data efficiently
+CREATE INDEX idx_predictions_input ON predictions(input_data_id);
+```
+
+**Query Examples:**
+```sql
+-- Find all images of the digit 7
+SELECT * FROM input_data WHERE true_label = 7;
+
+-- Find all incorrect predictions
+SELECT p.*, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id
+WHERE p.predicted_label != i.true_label;
+
+-- Find predictions with low confidence
+SELECT * FROM predictions WHERE confidence < 0.8;
+```
  
 ## Task 4: Multi-Docker Container Application
 
