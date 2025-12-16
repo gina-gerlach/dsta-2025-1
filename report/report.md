@@ -646,6 +646,9 @@ CREATE INDEX idx_predictions_label ON predictions(predicted_label);
 -- Link predictions to input data efficiently
 CREATE INDEX idx_predictions_input ON predictions(input_data_id);
 ```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
 
 **Query Examples:**
 ```sql
