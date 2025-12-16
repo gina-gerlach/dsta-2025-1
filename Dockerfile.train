@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install uv for faster dependency installation
+RUN pip install --no-cache-dir uv
+
+# Copy requirements.txt for caching
+COPY requirements.txt .
+
+# Install dependencies into the system Python inside the container
+RUN uv pip install --system --no-cache-dir -r requirements.txt
+
+# Copy the source code and training script
+COPY src/ src/
+COPY train_and_save.py .
+
+# Create directory for model persistence
+RUN mkdir -p /app/models
+
+# Set the volume mount point
+VOLUME ["/app/models"]
+
+# Train and save the model (exits after completion)
+CMD ["python", "train_and_save.py"]

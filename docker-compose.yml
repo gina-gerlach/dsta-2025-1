@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Model Training Service (runs once to create the model)
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    container_name: milestone3_train
+    volumes:
+      # Volume to persist trained model
+      - model_data:/app/models
+    environment:
+      MODEL_DIR: /app/models
+
+  # PostgreSQL Database Service
+  db:
+    image: postgres:16-alpine
+    container_name: milestone3_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume for persistent data storage
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Health check to ensure database is ready before app starts
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  # Python Application Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    container_name: milestone3_app
+    depends_on:
+      db:
+        # Wait for database to be healthy before starting app
+        condition: service_healthy
+      train:
+        # Wait for model training to complete
+        condition: service_completed_successfully
+    volumes:
+      # Volume to persist trained model
+      - model_data:/app/models
+    environment:
+      # Database connection settings
+      DB_HOST: db
+      DB_NAME: milestone_3
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      MODEL_DIR: /app/models
+    networks:
+      - app_network
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    # This volume persists the PostgreSQL database
+  model_data:
+    # This volume persists the trained neural network model
+
+# Network for inter-container communication
+networks:
+  app_network:
+    driver: bridge
