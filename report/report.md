@@ -28,6 +28,8 @@
 - [18. Tag and Release](#18-tag-and-release)
 
 * **Milestone 3:**
+- [Task 1: Docker-compose Installation and Questions](#task-1-docker-compose-installation-and-questions)
+- [Task 2: PostgreSQL and pgAdmin Questions, Installation and Test](#task-2-postgresql-and-pgadmin-questions-installation-and-test)
 - [Task 3: Image Storage in PostgreSQL](#task-3-image-storage-in-postgresql)
   - [The Impedance Mismatch Problem](#the-impedance-mismatch-problem)
   - [MNIST Dataset Structure](#mnist-dataset-structure)
@@ -516,6 +518,131 @@ PyPI, or the Python Package Index, is the central repository for Python software
 - Documentation: Should have a README, Application Programming Interface (API) docs, and usage examples/tutoritals.
 
 # Milestone 3
+## Task 1: Docker-compose Installation and Questions
+
+Task 1 introduces Docker Compose, a tool for defining and running multi-container Docker applications. This task explores service orchestration, network communication between containers, and port mapping.
+
+**Docker Compose version installed:** v2.40.3
+
+### Which services are being used for the application (described in the link above)? How do they relate to the host names in terms of computer networks?
+
+The Compose file defines two services: `web` and `redis`. 
+`web` runs a Flask application. It handles HTTP requests from the browser and for each request calls Redis to increment a counter. 
+`redis` is the server or database. It stores the counter value and listens for connections from web on its default port 6379.
+
+Each service runs in its own container and Docker configures an internal network where each container is reachable by a hostname that’s identical to its service name. 
+
+So, `web` connects to the `redis` service using the hostname `redis` on port 6379, just like computers on a normal network use hostnames to read each other.
+ 
+### What ports are being used (within the application and in the docker-compose file)?
+
+|   | **application**  | **docker-compose**  |
+|:---|:---|:---|
+| `web`  | 5000 (default port for Flask web server)  | 8000:5000 (host port:container port) | 
+| `redis`  | 6379 (default port)  | N/A redis doesn’t talk directly with host computers  |
+
+### How does the host machine (e.g. your computer) communicate with the application inside the
+Docker container. Which ports are exposed from the application to the host machine?
+
+The host machine communicates with the Flask app via the mapped ports listed above (8000:5000). The application listens on port 5000 inside the web container while Docker forwards traffic from localhost:8000 to the internal port 5000. That way when you open http:localhost:8000/ in a browser the request reaches the Flask app inside the container. The only port exposed from the application to the host in this example is host port 8000 mapped to container port 5000 on the web service.
+
+### What is localhost, why is it useful in the domain of web applications?
+
+`localhost` is the standard hostname that refers to the local machine. It’s useful because it allows you to test web applications locally before deploying them to remote servers.
+
+## Task 2: PostgreSQL and pgAdmin Questions, Installation and Test
+
+Task 2 focuses on setting up and interacting with a PostgreSQL database running in a Docker container. This includes using Python adapters to programmatically interact with the database and using pgAdmin as a graphical management tool.
+
+### What is PostgreSQL? Is it SQL or no-SQL (why?)
+
+It is an open-sourced object-relational database management system. It is SQL because it organizes data in relational tables with rows, columns and keys and uses SQL for defining and querying data. This is different from no-SQL databases (like Mongo or Redis) as they typically store data in formats like document or graph without fixed table schemas and use non-SQL query models.
+
+
+### Run a PostgreSQL Server (with the most current version) using a Docker image from the official PostgreSQL Docker Hub page
+
+Pull the latest official image:
+
+```bash
+docker pull postgres:latest
+```
+
+Create a user-defined Docker network so containers resolve each other by name (important for later steps):
+
+```bash
+docker network create pg-net
+```
+
+Run a container:
+
+```bash
+docker run --name my-postgres --network pg-net \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=postgres \
+  -p 5432:5432 \
+  -d postgres:latest
+```
+This code sets the container name, custom network, username, password and default database. It maps the host port 5432 to container port 5432 and runs the container in detached mode.
+
+### Make sure you expose the correct ports when running the Docker container (read the documentation on
+Docker Hub)
+
+PostgreSQL listens on port 5432 inside the container by default. The `-p` flag maps the host port 5432 (`localhost:5432`) to the container port 5432. If the host port was in use you could map a different host port by running `-p 5450:5432`. 
+
+### Find an appropriate Python package (Postgres adapter) that allows you to communicate with the
+database server
+
+`psycopg2-binary` will be used as the ProgresSQL adaptor. It follows all the requirements for a high-quality package as outlined in Milestone 2.
+https://pypi.org/project/psycopg2/
+
+Added to the requirements.txt then installed with
+```bash
+pip install -r requirements.txt
+```
+
+### Write a little python script
+
+In /src I created “postgres_jokes.py” that connects to the database server using "localhost:port”, creates a database called "ms3_jokes”, creates a Table called "jokes". The table should have an attribute "ID" which is it's primary key and another Attribute "JOKE" of character type "TEXT”, inserts your favorite joke into that table, selects your favorite joke (now in the database), and fetches it from the database and prints your favorite joke. 
+
+Checked this script locally 
+```bash
+Python3 postgres_jokes.py
+```
+Which resulted in
+
+```
+Created database 'ms3_jokes'
+Created table 'jokes'
+Inserted joke with ID 1
+Your joke from database: How much did the pirate pay to get his ears pierced? A buccaneer!
+```
+### Download the pgADMIN Tool (https://www.pgadmin.org/download/). It also exists as a Docker Image :).
+Connect to your running PostgreSQL Database. Can you see your database and table?
+
+Downloaded pgADMIN with
+```bash
+docker pull dpage/pgadmin4:latest
+```
+
+Then ran the pgADMIN container with
+```bash
+docker run --name pgadmin --network pg-net \
+  -p 8080:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@example.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  -d dpage/pgadmin4
+```
+
+Opened with http:/localhost:8080 and added a new server. In the connection section I set all values according to the my-postgres container. After this I was able to see my database and joke.
+
+###  If you stopped and deleted the Docker container running the database and restarted it. Would your joke still be in the database? Why or why not?
+
+If you only stop and start the same container, then yes the joke is still there because the data directory inside that container is preserved. But if you delete the container without a named volume then everything inside it is deleted including the PostgreSQL database and tables.
+
+### Issues and How They Were Solved
+
+Originally when I tried to set up pgAdmin I didn't add the network until later and wound up creating some unnecessary containers. I corrected this by searching the error messages that came up in pgAdmin when I tried to add a new server and then I removed all of my docker containers and networks and started fresh, which included rerunning the python script.
 
 ## Task 3: Image Storage in PostgreSQL
 
