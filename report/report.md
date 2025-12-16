@@ -3,6 +3,7 @@
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
+**Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 ## Table of Contents
 * **Milestone 1:**
@@ -18,15 +19,34 @@
 - [11. Tag and Release](#11-tag-and-release)
 ...
 * **Milestone 2:**
-- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branc-and-update)
+- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branch-and-update)
 - [13. Conceptual Questions](#13-conceptual-questions)
-- [14. Code Modularization and Refactoring](#14-code-modularization-and-refactoring)
+- [14. Code Modularization and Refactoring](#task-3-code-modularization-and-refactoring)
 - [15. pip Requirement File and Virtual Environment](#15-pip-requirement-file-and-virtual-environment)
-- [16. Dockerization](#16-dockerization)
+- [16. Dockerization](#dockerization)
 - [17. Testing "Dockerized" Code](#17-testing-dockerized-code)
 - [18. Tag and Release](#18-tag-and-release)
 
-
+* **Milestone 3:**
+- [Task 1: Docker-compose Installation and Questions](#task-1-docker-compose-installation-and-questions)
+- [Task 2: PostgreSQL and pgAdmin Questions, Installation and Test](#task-2-postgresql-and-pgadmin-questions-installation-and-test)
+- [Task 3: Image Storage in PostgreSQL](#task-3-image-storage-in-postgresql)
+  - [The Impedance Mismatch Problem](#the-impedance-mismatch-problem)
+  - [MNIST Dataset Structure](#mnist-dataset-structure)
+  - [Database Table Design](#database-table-design)
+- [Task 4: Multi-Docker Container Application](#task-4-multi-docker-container-application)
+  - [Architecture Overview](#architecture-overview)
+  - [Database Schema](#database-schema)
+  - [Docker Volumes](#docker-volumes)
+  - [Application Workflow](#application-workflow)
+  - [Docker Compose Startup Order](#docker-compose-startup-order)
+  - [Running the Application](#running-the-application)
+  - [Key Learnings](#key-learnings)
+- [Additional Questions](#additional-questions)
+  - [What is an SQL Injection Attack and how can you protect yourself?](#what-is-an-sql-injection-attack-and-how-can-you-protect-yourself)
+  - [What is ACID in the context of SQL Databases?](#what-is-acid-in-the-context-of-sql-databases)
+  - [What is the difference between a Relational Database and a Document Store?](#what-is-the-difference-between-a-relational-database-and-a-document-store)
+  - [What is a SQL Join Operation? What other common SQL statements exist?](#what-is-a-sql-join-operation-what-other-common-sql-statements-exist)
 ---
 # Milestone 1
 
@@ -497,277 +517,655 @@ PyPI, or the Python Package Index, is the central repository for Python software
 - Project Trust: Check the number of downloads, stars on GitHub and if it has been used by reputable projects
 - Documentation: Should have a README, Application Programming Interface (API) docs, and usage examples/tutoritals.
 
+# Milestone 3
+## Task 1: Docker-compose Installation and Questions
 
-## 14. Code Modularization and Refactoring
+Task 1 introduces Docker Compose, a tool for defining and running multi-container Docker applications. This task explores service orchestration, network communication between containers, and port mapping.
 
-### Objectives
-Tasks 3 and 4 required restructuring the original monolithic `mnist_convnet.py` script into a modular architecture with the following functionality:
+**Docker Compose version installed:** v2.40.3
 
-- Can load data
-- Can train (fit) a neural network on the data
-- Can save a fitted model to a ".h5" file (or saved model type for newer TensorFlow 2.0 versions)
-- Can load a ".h5" file, using Keras (or saved model type for newer TensorFlow 2.0 versions)
-- Can perform predictions using a "fitted" model, using Keras
+### Which services are being used for the application (described in the link above)? How do they relate to the host names in terms of computer networks?
 
-### Modular Architecture
+The Compose file defines two services: `web` and `redis`. 
+`web` runs a Flask application. It handles HTTP requests from the browser and for each request calls Redis to increment a counter. 
+`redis` is the server or database. It stores the counter value and listens for connections from web on its default port 6379.
 
-All objectives were met by splitting the original monolithic script into five specialized modules within the `src/` package:
+Each service runs in its own container and Docker configures an internal network where each container is reachable by a hostname that’s identical to its service name. 
 
-#### 1. [load_data.py](src/load_data.py)
-**Purpose:** Data loading and preprocessing
-**Functions:** `load_mnist_data()`
-**Responsibilities:**
-- Loads the MNIST dataset from Keras datasets
-- Normalizes pixel values to the [0, 1] range
-- Reshapes images to (28, 28, 1) format
-- Converts labels to one-hot encoded categorical format
-- Defines data constants (`NUM_CLASSES=10`, `INPUT_SHAPE=(28, 28, 1)`)
+So, `web` connects to the `redis` service using the hostname `redis` on port 6379, just like computers on a normal network use hostnames to read each other.
+ 
+### What ports are being used (within the application and in the docker-compose file)?
 
-**Rationale:** Separates data handling logic from model and training logic. This module can be reused by any component that needs MNIST data and ensures consistent preprocessing across the entire pipeline.
+|   | **application**  | **docker-compose**  |
+|:---|:---|:---|
+| `web`  | 5000 (default port for Flask web server)  | 8000:5000 (host port:container port) | 
+| `redis`  | 6379 (default port)  | N/A redis doesn’t talk directly with host computers  |
 
-#### 2. [create_model.py](src/create_model.py)
-**Purpose:** Neural network architecture definition
-**Functions:** `create_model()`
-**Responsibilities:**
-- Defines the CNN architecture (2 Conv2D layers, 2 MaxPooling layers, Dropout, Dense output layer)
-- Compiles the model with categorical crossentropy loss and Adam optimizer
-- Imports configuration constants from `load_data.py` (`INPUT_SHAPE`, `NUM_CLASSES`)
+### How does the host machine (e.g. your computer) communicate with the application inside the
+Docker container. Which ports are exposed from the application to the host machine?
 
-**Rationale:** Isolates the model architecture in a single location following the Single Responsibility Principle. This makes it easy to experiment with different architectures by simply modifying this module without affecting training or prediction code. The function-based approach allows for easy testing and potential parameterization in the future.
+The host machine communicates with the Flask app via the mapped ports listed above (8000:5000). The application listens on port 5000 inside the web container while Docker forwards traffic from localhost:8000 to the internal port 5000. That way when you open http:localhost:8000/ in a browser the request reaches the Flask app inside the container. The only port exposed from the application to the host in this example is host port 8000 mapped to container port 5000 on the web service.
 
-#### 3. [train_model.py](src/train_model.py)
-**Purpose:** Model training orchestration
-**Functions:** `train_model(epochs=5, batch_size=128)`
-**Responsibilities:**
-- Orchestrates the training process by importing and calling `load_mnist_data()` and `create_model()`
-- Fits the model on training data with specified hyperparameters
-- Evaluates the model on test data
-- Returns the trained model
+### What is localhost, why is it useful in the domain of web applications?
 
-**Rationale:** This module acts as a high-level training coordinator that brings together data loading and model creation. By accepting `epochs` and `batch_size` as parameters, it provides flexibility for hyperparameter tuning. This separation allows training logic to be reused independently of data loading or model architecture changes.
+`localhost` is the standard hostname that refers to the local machine. It’s useful because it allows you to test web applications locally before deploying them to remote servers.
 
-#### 4. [model_io.py](src/model_io.py)
-**Purpose:** Model persistence (saving and loading)
-**Functions:** `save_model(model, filepath='mnist_model.h5')`, `load_model(filepath='mnist_model.h5')`
-**Responsibilities:**
-- Saves trained models to disk in HDF5 format
-- Loads previously saved models from disk
-- Provides clear console feedback about save/load operations
+## Task 2: PostgreSQL and pgAdmin Questions, Installation and Test
 
-**Rationale:** Separates I/O operations from training and prediction logic. This module provides a clean interface for model persistence, making it easy to save checkpoints during training or deploy models in production. The default filepath parameter reduces boilerplate while maintaining flexibility.
+Task 2 focuses on setting up and interacting with a PostgreSQL database running in a Docker container. This includes using Python adapters to programmatically interact with the database and using pgAdmin as a graphical management tool.
 
-#### 5. [predict.py](src/predict.py)
-**Purpose:** Model inference
-**Functions:** `predict(model, x)`, `predict_classes(model, x)`
-**Responsibilities:**
-- `predict()`: Returns raw probability distributions for each class
-- `predict_classes()`: Returns the predicted class labels (argmax of probabilities)
+### What is PostgreSQL? Is it SQL or no-SQL (why?)
 
-**Rationale:** Encapsulates inference logic in dedicated functions. This separation allows prediction functionality to be reused across different contexts (batch predictions, single predictions, evaluation scripts) without duplicating code. The two-function approach provides flexibility for users who need either raw probabilities or class labels.
+It is an open-sourced object-relational database management system. It is SQL because it organizes data in relational tables with rows, columns and keys and uses SQL for defining and querying data. This is different from no-SQL databases (like Mongo or Redis) as they typically store data in formats like document or graph without fixed table schemas and use non-SQL query models.
 
-### Main Entry Point: [main.py](main.py)
 
-The `main.py` script serves as the orchestration layer that demonstrates the complete machine learning pipeline:
+### Run a PostgreSQL Server (with the most current version) using a Docker image from the official PostgreSQL Docker Hub page
 
-```python
-from src.train_model import train_model
-from src.load_data import load_mnist_data
-from src.model_io import save_model, load_model
-from src.predict import predict_classes
-```
-
-**Execution Flow:**
-1. Loads and preprocesses data using `load_mnist_data()`
-2. Trains the model using `train_model(epochs=5, batch_size=128)`
-3. Saves the trained model using `save_model(model, 'mnist_model.h5')`
-4. Demonstrates model loading using `load_model('mnist_model.h5')`
-5. Performs sample predictions on 10 test images using `predict_classes()`
-6. Compares predictions against ground truth labels
-
-**Rationale:** The `main.py` script demonstrates best practices by:
-- Importing only what's needed from each module
-- Following a clear, linear execution flow
-- Serving as executable documentation of the ML pipeline
-- Being runnable with a simple `python main.py` command
-
-### Reasoning Behind the Modularization
-
-**1. Single Responsibility Principle:** Each module has one clear purpose. `load_data.py` handles data, `create_model.py` defines architecture, `train_model.py` orchestrates training, etc. This makes the codebase easier to understand and maintain.
-
-**2. Reusability:** Functions can be imported and reused across different scripts. For example, `load_mnist_data()` can be used by training scripts, evaluation scripts, or visualization tools without code duplication.
-
-**3. Testability:** Each module can be tested independently. You can test data loading without training a model, or test model architecture creation without loading data.
-
-**4. Separation of Concerns:** Training logic is separate from model architecture, which is separate from data loading. This allows team members to work on different aspects simultaneously without conflicts.
-
-**5. Maintainability:** When changes are needed (e.g., switching from MNIST to a different dataset, or modifying the CNN architecture), modifications are localized to specific modules rather than scattered throughout a monolithic script.
-
-**6. Scalability:** The modular structure makes it easy to extend functionality. For example, adding data augmentation would only require modifying `load_data.py`, or adding a new model architecture would just mean creating a new function in `create_model.py`.
-
-**7. PEP 8 Compliance:** The modularized code follows Python naming conventions (lowercase with underscores for functions and modules), proper import organization, and clear function definitions with appropriate parameter defaults.
-
-### Module Interdependencies
-
-The modules work together through a dependency hierarchy:
-- `load_data.py` has no internal dependencies (only external: numpy, keras)
-- `create_model.py` imports constants from `load_data.py`
-- `train_model.py` imports functions from both `load_data.py` and `create_model.py`
-- `model_io.py` has no internal dependencies (only external: keras)
-- `predict.py` has no internal dependencies (operates on provided model objects)
-- `main.py` imports from all modules to orchestrate the complete pipeline
-
-This hierarchical structure prevents circular dependencies and creates a clean, maintainable architecture.
-
-## 15. pip Requirements File and Virtual Environment
-
-The requirement file was already created in Milestone 1. The file was reviewed to ensure all dependencies were pinned with their fixed version. Below are the dependencies and their corresponding SHA256 hashes which were count on pypi.org:
-
-| **Package Name** | **Version** | **SHA256 Hash Digest** |
-| :--- | :--- | :--- |
-| absl-py | 2.3.1 | eeecf07f0c2a93ace0772c92e596ace6d3d3996c042b2128459aaae2a76de11d |
-| astunparse | 1.6.3 | c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8 |
-| certifi | 2025.10.5 | 47c09d31ccf2acf0be3f701ea53595ee7e0b8fa08801c6624be771df09ae7b43 |
-| charset-normalizer | 3.4.4 | 94537985111c35f28720e43603b8e7b43a6ecfb2ce1d3058bbe955b73404e21a |
-| contourpy | 1.3.2 | b6945942715a034c671b7fc54f9588126b0b8bf23db2696e3ca8328f3ff0ab54 |
-| cycler | 0.12.1 | 88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c |
-| flatbuffers | 25.9.23 | 676f9fa62750bb50cf531b42a0a2a118ad8f7f797a511eda12881c016f093b12 |
-| fonttools | 4.60.1 | ef00af0439ebfee806b25f24c8f92109157ff3fac5731dc7867957812e87b8d9 |
-| gast | 0.6.0 | 88fc5300d32c7ac6ca7b515310862f71e6fdf2c029bbec7c66c0f5dd47b6b1fb |
-| google-pasta | 0.2.0 | c9f2c8dfc8f96d0d5808299920721be30c9eec37f2389f28904f454565c8a16e |
-| grpcio | 1.76.0 | 7be78388d6da1a25c0d5ec506523db58b18be22d9c37d8d3a32c08be4987bd73 |
-| h5py | 3.15.1 | c86e3ed45c4473564de55aa83b6fc9e5ead86578773dfbd93047380042e26b69 |
-| idna | 3.11 | 795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902 |
-| keras | 3.11.3 | efda616835c31b7d916d72303ef9adec1257320bc9fd4b2b0138840fc65fb5b7 |
-| kiwisolver | 1.4.9 | c3b22c26c6fd6811b0ae8363b95ca8ce4ea3c202d3d0975b2914310ceb1bcc4d |
-| libclang | 18.1.1 | a1214966d08d73d971287fc3ead8dfaf82eb07fb197680d8b3859dbbbbf78250 |
-| Markdown | 3.9 | d2900fe1782bd33bdbbd56859defef70c2e78fc46668f8eb9df3128138f2cb6a |
-| markdown-it-py | 4.0.0 | cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3 |
-| MarkupSafe | 3.0.3 | 722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698 |
-| matplotlib | 3.10.7 | a06ba7e2a2ef9131c79c49e63dad355d2d878413a0376c1727c8b9335ff731c7 |
-| mdurl | 0.1.2 | bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba |
-| ml_dtypes | 0.5.3 | 95ce33057ba4d05df50b1f3cfefab22e351868a843b3b15a46c65836283670c9 |
-| namex | 0.1.0 | 117f03ccd302cc48e3f5c58a296838f6b89c83455ab8683a1e85f2a430aa4306 |
-| numpy | 2.2.6 | e29554e2bef54a90aa5cc07da6ce955accb83f21ab5de01a62c8478897b264fd |
-| opt_einsum | 3.4.0 | 96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac |
-| optree | 0.17.0 | 5335a5ec44479920620d72324c66563bd705ab2a698605dd4b6ee67dbcad7ecd |
-| packaging | 25.0 | d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f |
-| pillow | 12.0.0 | 87d4f8125c9988bfbed67af47dd7a953e2fc7b0cc1e7800ec6d2080d490bb353 |
-| protobuf | 6.33.0 | 140303d5c8d2037730c548f8c7b93b20bb1dc301be280c378b82b8894589c954 |
-| Pygments | 2.19.2 | 636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887 |
-| pyparsing | 3.2.5 | 2df8d5b7b2802ef88e8d016a2eb9c7aeaa923529cd251ed0fe4608275d4105b6 |
-| python-dateutil | 2.9.0.post0 | 37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 |
-| requests | 2.32.5 | dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf |
-| rich | 14.2.0 | 73ff50c7c0c1c77c8243079283f4edb376f0f6442433aecb8ce7e6d0b92d1fe4 |
-| six | 1.17.0 | ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81 |
-| tensorboard | 2.20.0 | 9dc9f978cb84c0723acf9a345d96c184f0293d18f166bb8d59ee098e6cfaaba6 |
-| tensorboard-data-server | 0.7.2 | 7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb |
-| tensorflow | 2.20.0 | 47c88e05a07f1ead4977b4894b3ecd4d8075c40191065afc4fd9355c9db3d926 |
-| termcolor | 3.2.0 | 610e6456feec42c4bcd28934a8c87a06c3fa28b01561d46aa09a9881b8622c58 |
-| typing_extensions | 4.15.0 | 0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 |
-| urllib3 | 2.5.0 | 3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760 |
-| Werkzeug | 3.1.3 | 60723ce945c19328679790e3282cc758aa4a6040e4bb330f53d30fa546d44746 |
-| wrapt | 2.0.0 | 35a542cc7a962331d0279735c30995b024e852cf40481e384fd63caaa391cbb9 |
-
-### Virtual Environment
-
-Create and activate a virtual environment with
+Pull the latest official image:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # macOS / Linux
-# or
-.venv\Scripts\activate     # Windows PowerShell
+docker pull postgres:latest
 ```
 
-Then install the requirements packages with
+Create a user-defined Docker network so containers resolve each other by name (important for later steps):
 
+```bash
+docker network create pg-net
+```
+
+Run a container:
+
+```bash
+docker run --name my-postgres --network pg-net \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=postgres \
+  -p 5432:5432 \
+  -d postgres:latest
+```
+This code sets the container name, custom network, username, password and default database. It maps the host port 5432 to container port 5432 and runs the container in detached mode.
+
+### Make sure you expose the correct ports when running the Docker container (read the documentation on
+Docker Hub)
+
+PostgreSQL listens on port 5432 inside the container by default. The `-p` flag maps the host port 5432 (`localhost:5432`) to the container port 5432. If the host port was in use you could map a different host port by running `-p 5450:5432`. 
+
+### Find an appropriate Python package (Postgres adapter) that allows you to communicate with the
+database server
+
+`psycopg2-binary` will be used as the ProgresSQL adaptor. It follows all the requirements for a high-quality package as outlined in Milestone 2.
+https://pypi.org/project/psycopg2/
+
+Added to the requirements.txt then installed with
 ```bash
 pip install -r requirements.txt
 ```
 
-## 16. Dockerization
+### Write a little python script
 
-The goal was to dockerize the entire project to prevent the classic "it works on my machine" issue.
+In /src I created “postgres_jokes.py” that connects to the database server using "localhost:port”, creates a database called "ms3_jokes”, creates a Table called "jokes". The table should have an attribute "ID" which is it's primary key and another Attribute "JOKE" of character type "TEXT”, inserts your favorite joke into that table, selects your favorite joke (now in the database), and fetches it from the database and prints your favorite joke. 
 
-**Initial Approach:**
-We started with a basic Docker image using Python 3.12:
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-
-RUN pip install uv
-RUN uv pip install -r requirements.txt --target /app/.venv
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-FROM python:3.12-slim
-COPY main.py .
-COPY src/ src/
-
-CMD ["python", "main.py"]
+Checked this script locally 
+```bash
+Python3 postgres_jokes.py
 ```
-We used copy src/src/ to preserve the structure of our build, to ensure the import in main.py `from src.train_model import train_model` are working correctly. 
+Which resulted in
 
-Since TensorFlow is a large library, this approach took considerable time until everything was installed and built—initially around 4 minutes per build.
+```
+Created database 'ms3_jokes'
+Created table 'jokes'
+Inserted joke with ID 1
+Your joke from database: How much did the pirate pay to get his ears pierced? A buccaneer!
+```
+### Download the pgADMIN Tool (https://www.pgadmin.org/download/). It also exists as a Docker Image :).
+Connect to your running PostgreSQL Database. Can you see your database and table?
 
-**Optimized Approach:**
-We then switched to installing dependencies using `uv`, which significantly improved build times:
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-
-# Install uv once, globally
-RUN pip install --no-cache-dir uv
-
-# Copy requirements.txt for caching
-COPY requirements.txt .
-
-# Install deps into the system Python inside the container
-RUN uv pip install --system --no-cache-dir -r requirements.txt
-
-# Copy the source code and main.py 
-COPY src/ src/
-COPY main.py .
-
-CMD ["python", "main.py"]
+Downloaded pgADMIN with
+```bash
+docker pull dpage/pgadmin4:latest
 ```
 
-UV is a super fast replacement for pip, built in Rust, which allows for faster downloads and parallelization of installing the requirements.This optimization proved to be a good investment of time, the Docker image now builds in roughly 1/4 of the time. This was especially helpful during debugging sessions. When there were errors in one of the modules or missing libraries in requirements.txt, we no longer had to wait as long as before, however not all of that can be attributed to uv, as some of the installations are cached. 
+Then ran the pgADMIN container with
+```bash
+docker run --name pgadmin --network pg-net \
+  -p 8080:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@example.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  -d dpage/pgadmin4
+```
 
-**Why UV/Python 3.12 and not the TensorFlow image?**
-We used the Python 3.12-slim ( an official Image by Docker) image to speed up installations, as the TensorFlow image itself is already huge (around 3GB). Adding a `.dockerignore` file was essential to prevent the image from growing even larger. We excluded items like `.venv` and the `report` directory from the Docker context,not only to save space but mainly to avoid including unnecessary files in the image. The image only needs the `src` directory and `main.py` file to run and the requirements.txt for dependencies. 
+Opened with http:/localhost:8080 and added a new server. In the connection section I set all values according to the my-postgres container. After this I was able to see my database and joke.
 
-## 17. Testing "Dockerized" Code
+###  If you stopped and deleted the Docker container running the database and restarted it. Would your joke still be in the database? Why or why not?
 
-On Gina's setup the "dockerized" code was tested prior to merging to main branch.
-From the feature branch:
+If you only stop and start the same container, then yes the joke is still there because the data directory inside that container is preserved. But if you delete the container without a named volume then everything inside it is deleted including the PostgreSQL database and tables.
 
-1. Build the Docker image
+### Issues and How They Were Solved
+
+Originally when I tried to set up pgAdmin I didn't add the network until later and wound up creating some unnecessary containers. I corrected this by searching the error messages that came up in pgAdmin when I tried to add a new server and then I removed all of my docker containers and networks and started fresh, which included rerunning the python script.
+
+## Task 3: Image Storage in PostgreSQL
+
+Task 3 explores how to store image data in a relational database like PostgreSQL, addressing the "impedance mismatch" problem between object-oriented representations (NumPy arrays) and relational tables.
+
+### Question 1: Dataset Structure
+
+**How is the MNIST data structured?**
+
+The MNIST dataset contains 70,000 28×28 pixel grayscale images. They can be loaded as NumPy arrays with Keras:
+
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+
+**Dataset characteristics:**
+- Training samples: 60,000 images
+- Test samples: 10,000 images
+- Image shape: 28×28×1 (height × width × channels)
+- Pixel values: Normalized float32 in range [0, 1]
+- Labels: Integer 0-9 representing digits
+
+### Question 2: Database Table Design
+
+**How would you define relational database tables to save your data? What kind of data types could you use?**
+
+To store MNIST images in PostgreSQL, we use binary serialization. Images need to be converted to BYTEA (binary data) using serialization, then reversed on retrieval. NumPy's serialization (`np.save()`) provides an effective way to transform image arrays into bytes.
+
+#### Basic Table Schema
+
+| Attribute | Data Type | Purpose |
+|-----------|-----------|---------|
+| `id` | `SERIAL PRIMARY KEY` | Auto-incrementing unique identifier for each image |
+| `image_data` | `BYTEA` | Binary storage of serialized NumPy array (28×28 image) |
+| `true_label` | `INTEGER` | The actual digit (0-9) in the image |
+| `image_shape` | `VARCHAR(50)` | Shape metadata for validation (e.g., "(28, 28, 1)") |
+| `created_at` | `TIMESTAMP` | Timestamp when the image was inserted |
+
+**Why BYTEA?**
+This approach is more efficient than flattening into 784 individual columns or storing as text.
+
+### Question 3: Additional Attributes for Querying
+
+**What additional attributes might make sense to easily query your data (e.g., find all pictures of digit 7)?**
+
+Additional attributes that may assist in query may be:
+
+| *Attribute*  | *Data Type*  | *Purpose*  | *Example* |
+|---|---|---|---|
+| dataset_split  | TEXT  | Indicate if image is training or test set | Find only train images |
+| label | INTEGER  | 0-9 digit class | Find all 7s |
+| image_index  | INTEGER | Original dataset index  | Track original dataset position |
+
+### The Impedance Mismatch Problem
+
+The "impedance mismatch" problem occurs when trying to store object-oriented or array-based data (like images in Python) into relational databases (which use tables with rows and columns). This is similar to the serialization/deserialization process used when transmitting data over networks.
+
+#### How to Represent/Transform Image Data for Relational Databases
+
+**Problem:**
+- Python/NumPy represents images as multi-dimensional arrays (e.g., 28×28×1 for MNIST)
+- PostgreSQL stores data in tabular format with specific data types
+- Direct storage of NumPy arrays is not possible
+
+**Solution: Binary Serialization**
+
+We transform image data using the following approach:
+
+1. **Serialization (Python → Database):**
+   ```python
+   def serialize_image(image_array: np.ndarray) -> bytes:
+       buffer = io.BytesIO()
+       np.save(buffer, image_array)
+       return buffer.getvalue()
+   ```
+   - Convert NumPy array to bytes using NumPy's built-in serialization
+   - Store in PostgreSQL `BYTEA` (binary data) column
+
+2. **Deserialization (Database → Python):**
+   ```python
+   def deserialize_image(image_bytes: bytes) -> np.ndarray:
+       buffer = io.BytesIO(image_bytes)
+       return np.load(buffer, allow_pickle=False)
+   ```
+   - Retrieve bytes from database
+   - Reconstruct NumPy array using NumPy's load function
+
+**Alternative Approaches:**
+- **JSON encoding:** Convert array to JSON (less efficient for large arrays)
+- **Base64 encoding:** Encode bytes as text but this is less efficient
+- **External file storage:** Store images as files, reference paths in database
+- **Specialized databases:** Use PostgreSQL extensions like `cube` or dedicated image databases
+
+
+**How Data is Loaded:**
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+- Downloaded automatically from Keras
+- Cached locally for subsequent runs
+- Preprocessed: normalized and reshaped
+
+### Database Table Design
+
+#### PostgreSQL Data Types Used
+
+| Data Type | Usage | Rationale |
+|-----------|-------|-----------|
+| `SERIAL` | Primary keys (`id`) | Auto-incrementing integer, ensures uniqueness |
+| `BYTEA` | Image data, probability arrays | Binary data storage for serialized NumPy arrays |
+| `INTEGER` | Labels, predictions | Digit classification (0-9) |
+| `REAL` | Confidence scores | Floating-point for probability values |
+| `VARCHAR(50)` | Image shape metadata | Store shape as string for validation |
+| `TIMESTAMP` | Creation timestamps | Track when data was inserted |
+
+#### Table Attributes for Querying
+
+**Indexes for Performance:**
+```sql
+-- Find all images of a specific digit
+CREATE INDEX idx_input_data_label ON input_data(true_label);
+
+-- Find predictions for a specific digit
+CREATE INDEX idx_predictions_label ON predictions(predicted_label);
+
+-- Link predictions to input data efficiently
+CREATE INDEX idx_predictions_input ON predictions(input_data_id);
+```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
+
+**Query Examples:**
+```sql
+-- Find all images of the digit 7
+SELECT * FROM input_data WHERE true_label = 7;
+
+-- Find all incorrect predictions
+SELECT p.*, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id
+WHERE p.predicted_label != i.true_label;
+
+-- Find predictions with low confidence
+SELECT * FROM predictions WHERE confidence < 0.8;
+```
+ 
+## Task 4: Multi-Docker Container Application
+
+### Architecture Overview
+
+The application consists of two containerized services:
+
+1. **PostgreSQL Service (`db`):** Stateful database server
+2. **Python Application Service (`app`):** Stateless prediction service
+
+### Database Schema
+
+#### Entity-Relationship Diagram
+
+```
+┌─────────────────────────────────────┐
+│          input_data                 │
+├─────────────────────────────────────┤
+│  id (SERIAL, PRIMARY KEY)           |
+│  image_data (BYTEA)                 │
+│  image_data (BYTEA)                 │
+│  true_label (INTEGER)               │
+│  image_shape (VARCHAR)              │
+│  created_at (TIMESTAMP)             │
+└─────────────────┬───────────────────┘
+                  │
+                  │ 1
+                  │
+                  │ links to (Foreign Key)
+                  │
+                  │ *
+                  ▼
+┌─────────────────────────────────────┐
+│         predictions                 │
+├─────────────────────────────────────┤
+│ id (SERIAL, PRIMARY KEY)            |
+│ input_data_id (INTEGER, FK)         │
+│ predicted_label (INTEGER)           │
+│ confidence (REAL)                   │
+│ prediction_probabilities (BYTEA)    │
+│ created_at (TIMESTAMP)              │
+└─────────────────────────────────────┘
+```
+
+#### Relationship: One-to-Many
+- One `input_data` record can have many `predictions`
+- Each `prediction` must reference exactly one `input_data` record
+- Foreign key constraint: `predictions.input_data_id` → `input_data.id`
+- Cascade delete: If input data is deleted, associated predictions are also deleted
+
+#### Table: `input_data`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-incrementing unique identifier |
+| `image_data` | BYTEA | NOT NULL | Serialized NumPy array of image |
+| `true_label` | INTEGER | NOT NULL | Actual digit (0-9) in the image |
+| `image_shape` | VARCHAR(50) | NOT NULL | Shape metadata for validation |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Insertion timestamp |
+
+**Purpose:** Store input images and their ground truth labels
+
+#### Table: `predictions`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-incrementing unique identifier |
+| `input_data_id` | INTEGER | FOREIGN KEY → input_data(id) | Links to input image |
+| `predicted_label` | INTEGER | NOT NULL | Predicted digit (0-9) |
+| `confidence` | REAL | NOT NULL | Max probability (confidence score) |
+| `prediction_probabilities` | BYTEA | NOT NULL | Full probability distribution (10 values) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Prediction timestamp |
+
+**Purpose:** Store model predictions with references to input data
+
+### Docker Volumes
+
+#### `postgres_data` Volume
+**Purpose:** Persist PostgreSQL database
+```yaml
+volumes:
+  postgres_data:/var/lib/postgresql/data
+```
+- **Persistence:** Data survives container restarts/removals
+- **Location:** PostgreSQL's data directory
+- **Contents:** Database files, tables, indexes
+
+#### `model_data` Volume
+**Purpose:** Share trained neural network model
+```yaml
+volumes:
+  model_data:/app/models
+```
+- **Persistence:** Model survives container restarts
+- **Sharing:** Can be pre-loaded externally or trained separately
+- **Format:** Keras SavedModel format (`.keras` or `.h5`)
+
+### Application Workflow
+
+The Python application (`db_app.py`) executes the following steps:
+
+1. **Wait for Database:** Retries connection until PostgreSQL is ready
+2. **Initialize Database:** Creates `milestone_3` database if it doesn't exist
+3. **Create Tables:** Creates `input_data` and `predictions` tables
+4. **Load Model:** Loads trained neural network from volume
+5. **Load Sample:** Loads one MNIST test image
+6. **Serialize & Store:** Converts image to bytes and inserts into `input_data`
+7. **Retrieve & Deserialize:** Loads image back from database, converts to NumPy array
+8. **Verify:** Confirms deserialization matches original image
+9. **Predict:** Runs neural network inference on retrieved image
+10. **Store Prediction:** Inserts prediction into `predictions` table with foreign key
+
+
+## Docker Compose Startup Order
+
+### The Startup Order Problem
+
+**Issue:** Docker Compose starts containers in parallel by default. The Python app might try to connect to the database before PostgreSQL is ready, causing a crash.
+
+### Three `condition` Options
+
+Docker Compose provides three dependency conditions:
+
+#### 1. `service_started` (Default)
+```yaml
+depends_on:
+  db:
+    condition: service_started
+```
+- **Behavior:** Waits until the container starts
+- **Problem:** Container "started" ≠ service "ready"
+- **Risk:** PostgreSQL container might be running but not accepting connections
+- **Use Case:** When dependent service has no health check
+
+#### 2. `service_healthy`
+```yaml
+depends_on:
+  db:
+    condition: service_healthy
+```
+- **Behavior:** Waits until the health check passes
+- **Requirement:** Database must have a `healthcheck` defined
+- **Advantage:** Ensures service is actually ready to accept connections
+- **Use Case:** **Recommended for databases and critical services**
+
+#### 3. `service_completed_successfully`
+```yaml
+depends_on:
+  init:
+    condition: service_completed_successfully
+```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
+
+### Our Implementation: `service_healthy`
+
+**Database Health Check:**
+```yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+```
+
+**How it works:**
+1. PostgreSQL container starts
+2. Every 5 seconds, Docker runs `pg_isready -U postgres`
+3. If command succeeds, health check passes
+4. After 5 consecutive failures (5s × 5 = 25s), container is marked unhealthy
+5. Only after health check passes does the `app` container start
+
+**Application Dependency:**
+```yaml
+app:
+  depends_on:
+    db:
+      condition: service_healthy
+```
+
+**Benefits:**
+- Prevents race conditions
+- No manual connection retry logic needed (though we include it for extra safety)
+- Explicit dependency declaration
+- Self-documenting service requirements
+
+
+
+### Additional Safety: Application-Level Retry
+
+Even with `service_healthy`, we implement retry logic in `db_app.py`:
+
+```python
+def wait_for_db(max_retries: int = 30, retry_delay: int = 2):
+    for attempt in range(max_retries):
+        try:
+            conn = psycopg2.connect(...)
+            return True
+        except Exception:
+            time.sleep(retry_delay)
+    raise Exception("Database not ready")
+```
+
+
+---
+
+## Running the Application
+
+### Prerequisites
+
+1. **Train and save a model:**
+   ```bash
+   # Option 1: Train locally first
+   python main.py
+
+   # Then copy model to volume location
+   docker volume create milestone3_model_data
+   docker run --rm -v $(pwd)/models:/src -v milestone3_model_data:/dest \
+     alpine sh -c "cp /src/mnist_model.keras /dest/"
+   ```
+
+2. **Or use the included model training:**
+   The Dockerfile can be extended to train the model during build.
+
+### Start the Application
 
 ```bash
-docker build -t data-mnist:latest .
+# Start both services
+docker-compose up
+
+# Or run in detached mode
+docker-compose up -d
 ```
 
-The Docker image was built successfully with no errors. After this we ran the container with -it to show the outputs to verify the code worked, and  —rm to remove the container after it finished.
+### Verify the Database
+
+**Option 1: Using psql**
+```bash
+docker exec -it milestone3_postgres psql -U postgres -d milestone_3
+
+# Query input data
+SELECT id, true_label, created_at FROM input_data;
+
+# Query predictions with join
+SELECT p.id, p.predicted_label, p.confidence, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id;
+```
+
+**Option 2: Using pgAdmin**
+1. Install pgAdmin or use web version
+2. Connect to `localhost:5432`
+3. Username: `postgres`, Password: `postgres`
+4. Navigate to `milestone_3` database
+5. Inspect `input_data` and `predictions` tables
+
+### Clean Up
 
 ```bash
-docker run --rm -it dsta-mnist:latest
+# Stop containers
+docker-compose down
+
+# Stop and remove volumes (fresh start)
+docker-compose down -v
 ```
 
-The output showed that the dataset loaded, the neural network trained for 5 epochs, the model was evaluated on the test set, the model was saved as a .h5 file in the container, the model was loaded back correctly and run. The final predictions were accurate on unseen data. 
+**Note:** To start fresh, you must remove the `postgres_data` volume. Otherwise, the database will persist and the application will detect it already exists.
 
-## 18. Tag and Release
-Finally, the ReadMe was updated with the current project structure and Docker workflow to run the code.
 
-After merging into `main`, a release tag was created for grading:
+## Key Learnings
 
-```bash
-git tag milestone_2
-git push origin milestone_2
-```
->  **Milestone 2 Summary:**  
-> Both team members successfully modularized the MNIST CNN code, created a fully reproducible Dockerized workflow, and ensured the pipeline runs end-to-end (training, saving/loading the model, and performing inference) across any system.
+1. **Impedance Mismatch:** Binary serialization (NumPy → bytes → BYTEA) solves the object-relational mapping problem for images
+
+2. **Data Persistence:** Docker volumes provide stateful storage for stateless containers
+
+3. **Service Dependencies:** Health checks prevent race conditions in multi-container applications
+
+4. **Database Design:** Foreign keys maintain referential integrity between predictions and input data
+
+5. **Microservices:** Separation of database and application services enables independent scaling and deployment
+
+## Additional questions:
+
+## What is an SQL Injection Attack and how can you protect yourself?
+
+A **SQL Injection Attack** is a malicious attack where an attacker injects harmful SQL code into an input field (for example a login form or search field) in order to manipulate the database.
+
+Instead of normal input, an attacker could submit something like:
+
+' OR 1=1; --
+
+or even destructive commands such as:
+
+DROP DATABASE;
+
+If the application directly concatenates user input into SQL queries, this code may be executed by the database. This can lead to unauthorized access, data leakage, or complete data loss and is therefore a **critical security vulnerability**.
+
+**Protection measures:**
+- Use **prepared statements / parameterized queries** so user input is treated as data, not executable SQL
+- Apply **input validation and type enforcement** (e.g. only integers for age fields)
+- **Never allow users to directly communicate with the database**; always use a backend server
+- Use **ORM frameworks** (e.g. SQLAlchemy, Hibernate)
+- Apply the **principle of least privilege** for database users
+- Avoid **dynamic SQL string concatenation**
+
+## What is ACID in the context of SQL Databases?
+
+**ACID** describes four properties that guarantee reliable database transactions:
+
+- **Atomicity**  
+  A transaction is all-or-nothing. Either all operations succeed or none are applied.
+
+- **Consistency**  
+  A transaction moves the database from one valid state to another while respecting all constraints and rules.
+
+- **Isolation**  
+  Concurrent transactions do not interfere with each other; results are as if transactions were executed sequentially.
+
+- **Durability**  
+  Once a transaction is committed, the changes are permanently stored, even in case of crashes or power failures.
+
+## What is the difference between a Relational Database and a Document Store?  
+### In which scenarios would you use which technology?
+
+### Relational Databases
+- Enforce a **fixed schema** (tables, columns, data types)
+- Store data in **rows and columns**
+- Support **joins**, constraints, and complex queries
+- Provide strong **ACID guarantees**
+
+**Typical use cases:**
+- Structured, tabular data
+- Financial and accounting systems
+- Applications requiring strong consistency and relationships
+
+Examples: PostgreSQL, MySQL, SQL Server
+
+---
+
+### Document Stores
+- Use **flexible or schema-less documents** (typically JSON)
+- Support nested data structures
+- Little or no join support
+- Easier horizontal scaling
+
+**Typical use cases:**
+- Semi-structured or evolving data
+- JSON-heavy applications
+- User profiles, logs, content management systems
+
+Examples: MongoDB, CouchDB
+
+## What is a SQL Join Operation? What other common SQL statements exist?
+
+A **SQL Join** operation combines rows from two or more tables using a related column (usually a foreign key).
+
+**Common join types:**
+- **INNER JOIN** – returns only matching rows from both tables
+- **LEFT JOIN** – returns all rows from the left table and matching rows from the right
+- **RIGHT JOIN** – returns all rows from the right table and matching rows from the left
+- **FULL OUTER JOIN** – returns all rows from both tables, matched where possible
+
+**Other common SQL statements:**
+- `SELECT` – retrieve data
+- `INSERT` – add new rows
+- `UPDATE` – modify existing rows
+- `DELETE` – remove rows
+- `WHERE` – filter records
+- `GROUP BY` – aggregate data
+- `HAVING` – filter aggregated results
+- `ORDER BY` – sort query results
+- `CREATE`, `ALTER`, `DROP` – manage database structures
+- `INDEX` – improve query performance
+- `TRANSACTION`, `COMMIT`, `ROLLBACK` – control transactions
+
+
