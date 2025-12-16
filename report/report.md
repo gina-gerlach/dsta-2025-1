@@ -1,5 +1,4 @@
 # Milestone Report
-
 **Course:** Data Science Toolkits and Architectures  
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
@@ -419,182 +418,6 @@ git push origin milestone_1
 
 Milestone 2 focused on the development of a Dockerization of the project and to split the single mnist_convnet.py file into reusable modules. We split the 6 Tasks among us and documented each Task using issues on Github.
 
-## Task 3: Code Modularization and Refactoring
-
-### Objectives
-Task 3 required restructuring the original monolithic `mnist_convnet.py` script into a modular architecture with the following functionality:
-
-- Can load data
-- Can train (fit) a neural network on the data
-- Can save a fitted model to a ".h5" file (or saved model type for newer TensorFlow 2.0 versions)
-- Can load a ".h5" file, using Keras (or saved model type for newer TensorFlow 2.0 versions)
-- Can perform predictions using a "fitted" model, using Keras
-
-### Modular Architecture
-
-All objectives were met by splitting the original monolithic script into five specialized modules within the `src/` package:
-
-#### 1. [load_data.py](src/load_data.py)
-**Purpose:** Data loading and preprocessing
-**Functions:** `load_mnist_data()`
-**Responsibilities:**
-- Loads the MNIST dataset from Keras datasets
-- Normalizes pixel values to the [0, 1] range
-- Reshapes images to (28, 28, 1) format
-- Converts labels to one-hot encoded categorical format
-- Defines data constants (`NUM_CLASSES=10`, `INPUT_SHAPE=(28, 28, 1)`)
-
-**Rationale:** Separates data handling logic from model and training logic. This module can be reused by any component that needs MNIST data and ensures consistent preprocessing across the entire pipeline.
-
-#### 2. [create_model.py](src/create_model.py)
-**Purpose:** Neural network architecture definition
-**Functions:** `create_model()`
-**Responsibilities:**
-- Defines the CNN architecture (2 Conv2D layers, 2 MaxPooling layers, Dropout, Dense output layer)
-- Compiles the model with categorical crossentropy loss and Adam optimizer
-- Imports configuration constants from `load_data.py` (`INPUT_SHAPE`, `NUM_CLASSES`)
-
-**Rationale:** Isolates the model architecture in a single location following the Single Responsibility Principle. This makes it easy to experiment with different architectures by simply modifying this module without affecting training or prediction code. The function-based approach allows for easy testing and potential parameterization in the future.
-
-#### 3. [train_model.py](src/train_model.py)
-**Purpose:** Model training orchestration
-**Functions:** `train_model(epochs=5, batch_size=128)`
-**Responsibilities:**
-- Orchestrates the training process by importing and calling `load_mnist_data()` and `create_model()`
-- Fits the model on training data with specified hyperparameters
-- Evaluates the model on test data
-- Returns the trained model
-
-**Rationale:** This module acts as a high-level training coordinator that brings together data loading and model creation. By accepting `epochs` and `batch_size` as parameters, it provides flexibility for hyperparameter tuning. This separation allows training logic to be reused independently of data loading or model architecture changes.
-
-#### 4. [model_io.py](src/model_io.py)
-**Purpose:** Model persistence (saving and loading)
-**Functions:** `save_model(model, filepath='mnist_model.h5')`, `load_model(filepath='mnist_model.h5')`
-**Responsibilities:**
-- Saves trained models to disk in HDF5 format
-- Loads previously saved models from disk
-- Provides clear console feedback about save/load operations
-
-**Rationale:** Separates I/O operations from training and prediction logic. This module provides a clean interface for model persistence, making it easy to save checkpoints during training or deploy models in production. The default filepath parameter reduces boilerplate while maintaining flexibility.
-
-#### 5. [predict.py](src/predict.py)
-**Purpose:** Model inference
-**Functions:** `predict(model, x)`, `predict_classes(model, x)`
-**Responsibilities:**
-- `predict()`: Returns raw probability distributions for each class
-- `predict_classes()`: Returns the predicted class labels (argmax of probabilities)
-
-**Rationale:** Encapsulates inference logic in dedicated functions. This separation allows prediction functionality to be reused across different contexts (batch predictions, single predictions, evaluation scripts) without duplicating code. The two-function approach provides flexibility for users who need either raw probabilities or class labels.
-
-### Main Entry Point: [main.py](main.py)
-
-The `main.py` script serves as the orchestration layer that demonstrates the complete machine learning pipeline:
-
-```python
-from src.train_model import train_model
-from src.load_data import load_mnist_data
-from src.model_io import save_model, load_model
-from src.predict import predict_classes
-```
-
-**Execution Flow:**
-1. Loads and preprocesses data using `load_mnist_data()`
-2. Trains the model using `train_model(epochs=5, batch_size=128)`
-3. Saves the trained model using `save_model(model, 'mnist_model.h5')`
-4. Demonstrates model loading using `load_model('mnist_model.h5')`
-5. Performs sample predictions on 10 test images using `predict_classes()`
-6. Compares predictions against ground truth labels
-
-**Rationale:** The `main.py` script demonstrates best practices by:
-- Importing only what's needed from each module
-- Following a clear, linear execution flow
-- Serving as executable documentation of the ML pipeline
-- Being runnable with a simple `python main.py` command
-
-### Reasoning Behind the Modularization
-
-**1. Single Responsibility Principle:** Each module has one clear purpose. `load_data.py` handles data, `create_model.py` defines architecture, `train_model.py` orchestrates training, etc. This makes the codebase easier to understand and maintain.
-
-**2. Reusability:** Functions can be imported and reused across different scripts. For example, `load_mnist_data()` can be used by training scripts, evaluation scripts, or visualization tools without code duplication.
-
-**3. Testability:** Each module can be tested independently. You can test data loading without training a model, or test model architecture creation without loading data.
-
-**4. Separation of Concerns:** Training logic is separate from model architecture, which is separate from data loading. This allows team members to work on different aspects simultaneously without conflicts.
-
-**5. Maintainability:** When changes are needed (e.g., switching from MNIST to a different dataset, or modifying the CNN architecture), modifications are localized to specific modules rather than scattered throughout a monolithic script.
-
-**6. Scalability:** The modular structure makes it easy to extend functionality. For example, adding data augmentation would only require modifying `load_data.py`, or adding a new model architecture would just mean creating a new function in `create_model.py`.
-
-**7. PEP 8 Compliance:** The modularized code follows Python naming conventions (lowercase with underscores for functions and modules), proper import organization, and clear function definitions with appropriate parameter defaults.
-
-### Module Interdependencies
-
-The modules work together through a dependency hierarchy:
-- `load_data.py` has no internal dependencies (only external: numpy, keras)
-- `create_model.py` imports constants from `load_data.py`
-- `train_model.py` imports functions from both `load_data.py` and `create_model.py`
-- `model_io.py` has no internal dependencies (only external: keras)
-- `predict.py` has no internal dependencies (operates on provided model objects)
-- `main.py` imports from all modules to orchestrate the complete pipeline
-
-This hierarchical structure prevents circular dependencies and creates a clean, maintainable architecture.
-
-#### Dockerization
-
-The goal was to dockerize the entire project to prevent the classic "it works on my machine" issue.
-
-**Initial Approach:**
-We started with a basic Docker image using Python 3.12:
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-
-RUN pip install uv
-RUN uv pip install -r requirements.txt --target /app/.venv
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-FROM python:3.12-slim
-COPY main.py .
-COPY src/ src/
-
-CMD ["python", "main.py"]
-```
-We used copy src/src/ to preserve the structure of our build, to ensure the import in main.py `from src.train_model import train_model` are working correctly. 
-
-Since TensorFlow is a large library, this approach took considerable time until everything was installed and built—initially around 4 minutes per build.
-
-**Optimized Approach:**
-We then switched to installing dependencies using `uv`, which significantly improved build times:
-
-```dockerfile
-FROM python:3.12-slim
-
-WORKDIR /app
-
-# Install uv once, globally
-RUN pip install --no-cache-dir uv
-
-# Copy requirements.txt for caching
-COPY requirements.txt .
-
-# Install deps into the system Python inside the container
-RUN uv pip install --system --no-cache-dir -r requirements.txt
-
-# Copy the source code and main.py 
-COPY src/ src/
-COPY main.py .
-
-CMD ["python", "main.py"]
-```
-
-UV is a super fast replacement for pip, built in Rust, which allows for faster downloads and parallelization of installing the requirements.This optimization proved to be a good investment of time, the Docker image now builds in roughly 1/4 of the time. This was especially helpful during debugging sessions. When there were errors in one of the modules or missing libraries in requirements.txt, we no longer had to wait as long as before, however not all of that can be attributed to uv, as some of the installations are cached. 
-
-**Why UV/Python 3.12 and not the TensorFlow image?**
-We used the Python 3.12-slim ( an official Image by Docker) image to speed up installations, as the TensorFlow image itself is already huge (around 3GB). Adding a `.dockerignore` file was essential to prevent the image from growing even larger. We excluded items like `.venv` and the `report` directory from the Docker context,not only to save space but mainly to avoid including unnecessary files in the image. The image only needs the `src` directory and `main.py` file to run and the requirements.txt for dependencies. 
-
 ## 12. .gitignore Dev Branch and Update
 
 The initial .gitignore was already created and added to the root folder in Step 7.
@@ -627,6 +450,13 @@ git checkout feature_branch
 git rebase dev
 ```
 
+An issue arose when updating a feature branch after many commits had been made. Instead of using rebase, which requires you resolve conflicts on each commit, we used merge at that time. Then conflicts only had to be resolved once
+
+```bash
+git checkout feature_branch
+git merge dev
+```
+
 At this time, the following entries were added:
 
 | Group | File Types | Notes |
@@ -644,6 +474,7 @@ A hash function converts data into a unique alphanumeric output string. This out
 
 Hash functions are used in:
 - Code versioning and Reproducibility: On Git, file version and commits have a hash which is used to ensure that they are what they say they are and can be reproduced accurately.
+- Dependency Verification: For requirements files, the SHA256 hash of a package can be used to verify that the package the user downloads is the same as the author. 
 - Data Integrity: When downloading large datasets, hashes may be provided to ensure that the data was downloaded correctly to the user's computer and no files were corrupted during download.
 - Security: SSH protocol relies on hashing as part of it's encryption process.
 
