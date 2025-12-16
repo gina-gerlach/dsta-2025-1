@@ -4,6 +4,7 @@
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
+**Milestone 3** focuses on multi docker applications and PostgresDB
 
 ## Table of Contents
 * **Milestone 1:**
@@ -26,7 +27,20 @@
 - [16. Task 5 - Change Title](#16)
 - [17. Task 6 - Change Title](#17)
 
-
+* **Milestone 3:**
+- [Task 4: Multi-Docker Container Application](#task-4-multi-docker-container-application)
+  - [Architecture Overview](#architecture-overview)
+  - [Database Schema](#database-schema)
+  - [Docker Volumes](#docker-volumes)
+  - [Application Workflow](#application-workflow)
+  - [Docker Compose Startup Order](#docker-compose-startup-order)
+  - [Running the Application](#running-the-application)
+  - [Key Learnings](#key-learnings)
+- [Additional Questions](#additional-questions)
+  - [What is an SQL Injection Attack and how can you protect yourself?](#what-is-an-sql-injection-attack-and-how-can-you-protect-yourself)
+  - [What is ACID in the context of SQL Databases?](#what-is-acid-in-the-context-of-sql-databases)
+  - [What is the difference between a Relational Database and a Document Store?](#what-is-the-difference-between-a-relational-database-and-a-document-store)
+  - [What is a SQL Join Operation? What other common SQL statements exist?](#what-is-a-sql-join-operation-what-other-common-sql-statements-exist)
 ---
 # Milestone 1
 
@@ -664,3 +678,383 @@ PyPI, or the Python Package Index, is the central repository for Python software
 - Project Information: Should have a link to a GitHub repo with commits, contributors and issue tracker activity
 - Project Trust: Check the number of downloads, stars on GitHub and if it has been used by reputable projects
 - Documentation: Should have a README, Application Programming Interface (API) docs, and usage examples/tutoritals.
+
+# Milestone 3
+ 
+## Task 4: Multi-Docker Container Application
+
+### Architecture Overview
+
+The application consists of two containerized services:
+
+1. **PostgreSQL Service (`db`):** Stateful database server
+2. **Python Application Service (`app`):** Stateless prediction service
+
+### Database Schema
+
+#### Entity-Relationship Diagram
+
+```
+┌─────────────────────────────────────┐
+│          input_data                 │
+├─────────────────────────────────────┤
+│  id (SERIAL, PRIMARY KEY)           |
+│  image_data (BYTEA)                 │
+│  image_data (BYTEA)                 │
+│  true_label (INTEGER)               │
+│  image_shape (VARCHAR)              │
+│  created_at (TIMESTAMP)             │
+└─────────────────┬───────────────────┘
+                  │
+                  │ 1
+                  │
+                  │ links to (Foreign Key)
+                  │
+                  │ *
+                  ▼
+┌─────────────────────────────────────┐
+│         predictions                 │
+├─────────────────────────────────────┤
+│ id (SERIAL, PRIMARY KEY)            |
+│ input_data_id (INTEGER, FK)         │
+│ predicted_label (INTEGER)           │
+│ confidence (REAL)                   │
+│ prediction_probabilities (BYTEA)    │
+│ created_at (TIMESTAMP)              │
+└─────────────────────────────────────┘
+```
+
+#### Relationship: One-to-Many
+- One `input_data` record can have many `predictions`
+- Each `prediction` must reference exactly one `input_data` record
+- Foreign key constraint: `predictions.input_data_id` → `input_data.id`
+- Cascade delete: If input data is deleted, associated predictions are also deleted
+
+#### Table: `input_data`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-incrementing unique identifier |
+| `image_data` | BYTEA | NOT NULL | Serialized NumPy array of image |
+| `true_label` | INTEGER | NOT NULL | Actual digit (0-9) in the image |
+| `image_shape` | VARCHAR(50) | NOT NULL | Shape metadata for validation |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Insertion timestamp |
+
+**Purpose:** Store input images and their ground truth labels
+
+#### Table: `predictions`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-incrementing unique identifier |
+| `input_data_id` | INTEGER | FOREIGN KEY → input_data(id) | Links to input image |
+| `predicted_label` | INTEGER | NOT NULL | Predicted digit (0-9) |
+| `confidence` | REAL | NOT NULL | Max probability (confidence score) |
+| `prediction_probabilities` | BYTEA | NOT NULL | Full probability distribution (10 values) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Prediction timestamp |
+
+**Purpose:** Store model predictions with references to input data
+
+### Docker Volumes
+
+#### `postgres_data` Volume
+**Purpose:** Persist PostgreSQL database
+```yaml
+volumes:
+  postgres_data:/var/lib/postgresql/data
+```
+- **Persistence:** Data survives container restarts/removals
+- **Location:** PostgreSQL's data directory
+- **Contents:** Database files, tables, indexes
+
+#### `model_data` Volume
+**Purpose:** Share trained neural network model
+```yaml
+volumes:
+  model_data:/app/models
+```
+- **Persistence:** Model survives container restarts
+- **Sharing:** Can be pre-loaded externally or trained separately
+- **Format:** Keras SavedModel format (`.keras` or `.h5`)
+
+### Application Workflow
+
+The Python application (`db_app.py`) executes the following steps:
+
+1. **Wait for Database:** Retries connection until PostgreSQL is ready
+2. **Initialize Database:** Creates `milestone_3` database if it doesn't exist
+3. **Create Tables:** Creates `input_data` and `predictions` tables
+4. **Load Model:** Loads trained neural network from volume
+5. **Load Sample:** Loads one MNIST test image
+6. **Serialize & Store:** Converts image to bytes and inserts into `input_data`
+7. **Retrieve & Deserialize:** Loads image back from database, converts to NumPy array
+8. **Verify:** Confirms deserialization matches original image
+9. **Predict:** Runs neural network inference on retrieved image
+10. **Store Prediction:** Inserts prediction into `predictions` table with foreign key
+
+
+## Docker Compose Startup Order
+
+### The Startup Order Problem
+
+**Issue:** Docker Compose starts containers in parallel by default. The Python app might try to connect to the database before PostgreSQL is ready, causing a crash.
+
+### Three `condition` Options
+
+Docker Compose provides three dependency conditions:
+
+#### 1. `service_started` (Default)
+```yaml
+depends_on:
+  db:
+    condition: service_started
+```
+- **Behavior:** Waits until the container starts
+- **Problem:** Container "started" ≠ service "ready"
+- **Risk:** PostgreSQL container might be running but not accepting connections
+- **Use Case:** When dependent service has no health check
+
+#### 2. `service_healthy`
+```yaml
+depends_on:
+  db:
+    condition: service_healthy
+```
+- **Behavior:** Waits until the health check passes
+- **Requirement:** Database must have a `healthcheck` defined
+- **Advantage:** Ensures service is actually ready to accept connections
+- **Use Case:** **Recommended for databases and critical services**
+
+#### 3. `service_completed_successfully`
+```yaml
+depends_on:
+  init:
+    condition: service_completed_successfully
+```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
+
+### Our Implementation: `service_healthy`
+
+**Database Health Check:**
+```yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+```
+
+**How it works:**
+1. PostgreSQL container starts
+2. Every 5 seconds, Docker runs `pg_isready -U postgres`
+3. If command succeeds, health check passes
+4. After 5 consecutive failures (5s × 5 = 25s), container is marked unhealthy
+5. Only after health check passes does the `app` container start
+
+**Application Dependency:**
+```yaml
+app:
+  depends_on:
+    db:
+      condition: service_healthy
+```
+
+**Benefits:**
+- Prevents race conditions
+- No manual connection retry logic needed (though we include it for extra safety)
+- Explicit dependency declaration
+- Self-documenting service requirements
+
+
+
+### Additional Safety: Application-Level Retry
+
+Even with `service_healthy`, we implement retry logic in `db_app.py`:
+
+```python
+def wait_for_db(max_retries: int = 30, retry_delay: int = 2):
+    for attempt in range(max_retries):
+        try:
+            conn = psycopg2.connect(...)
+            return True
+        except Exception:
+            time.sleep(retry_delay)
+    raise Exception("Database not ready")
+```
+
+
+---
+
+## Running the Application
+
+### Prerequisites
+
+1. **Train and save a model:**
+   ```bash
+   # Option 1: Train locally first
+   python main.py
+
+   # Then copy model to volume location
+   docker volume create milestone3_model_data
+   docker run --rm -v $(pwd)/models:/src -v milestone3_model_data:/dest \
+     alpine sh -c "cp /src/mnist_model.keras /dest/"
+   ```
+
+2. **Or use the included model training:**
+   The Dockerfile can be extended to train the model during build.
+
+### Start the Application
+
+```bash
+# Start both services
+docker-compose up
+
+# Or run in detached mode
+docker-compose up -d
+```
+
+### Verify the Database
+
+**Option 1: Using psql**
+```bash
+docker exec -it milestone3_postgres psql -U postgres -d milestone_3
+
+# Query input data
+SELECT id, true_label, created_at FROM input_data;
+
+# Query predictions with join
+SELECT p.id, p.predicted_label, p.confidence, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id;
+```
+
+**Option 2: Using pgAdmin**
+1. Install pgAdmin or use web version
+2. Connect to `localhost:5432`
+3. Username: `postgres`, Password: `postgres`
+4. Navigate to `milestone_3` database
+5. Inspect `input_data` and `predictions` tables
+
+### Clean Up
+
+```bash
+# Stop containers
+docker-compose down
+
+# Stop and remove volumes (fresh start)
+docker-compose down -v
+```
+
+**Note:** To start fresh, you must remove the `postgres_data` volume. Otherwise, the database will persist and the application will detect it already exists.
+
+
+## Key Learnings
+
+1. **Impedance Mismatch:** Binary serialization (NumPy → bytes → BYTEA) solves the object-relational mapping problem for images
+
+2. **Data Persistence:** Docker volumes provide stateful storage for stateless containers
+
+3. **Service Dependencies:** Health checks prevent race conditions in multi-container applications
+
+4. **Database Design:** Foreign keys maintain referential integrity between predictions and input data
+
+5. **Microservices:** Separation of database and application services enables independent scaling and deployment
+
+## Additional questions:
+
+## What is an SQL Injection Attack and how can you protect yourself?
+
+A **SQL Injection Attack** is a malicious attack where an attacker injects harmful SQL code into an input field (for example a login form or search field) in order to manipulate the database.
+
+Instead of normal input, an attacker could submit something like:
+
+' OR 1=1; --
+
+or even destructive commands such as:
+
+DROP DATABASE;
+
+If the application directly concatenates user input into SQL queries, this code may be executed by the database. This can lead to unauthorized access, data leakage, or complete data loss and is therefore a **critical security vulnerability**.
+
+**Protection measures:**
+- Use **prepared statements / parameterized queries** so user input is treated as data, not executable SQL
+- Apply **input validation and type enforcement** (e.g. only integers for age fields)
+- **Never allow users to directly communicate with the database**; always use a backend server
+- Use **ORM frameworks** (e.g. SQLAlchemy, Hibernate)
+- Apply the **principle of least privilege** for database users
+- Avoid **dynamic SQL string concatenation**
+
+## What is ACID in the context of SQL Databases?
+
+**ACID** describes four properties that guarantee reliable database transactions:
+
+- **Atomicity**  
+  A transaction is all-or-nothing. Either all operations succeed or none are applied.
+
+- **Consistency**  
+  A transaction moves the database from one valid state to another while respecting all constraints and rules.
+
+- **Isolation**  
+  Concurrent transactions do not interfere with each other; results are as if transactions were executed sequentially.
+
+- **Durability**  
+  Once a transaction is committed, the changes are permanently stored, even in case of crashes or power failures.
+
+## What is the difference between a Relational Database and a Document Store?  
+### In which scenarios would you use which technology?
+
+### Relational Databases
+- Enforce a **fixed schema** (tables, columns, data types)
+- Store data in **rows and columns**
+- Support **joins**, constraints, and complex queries
+- Provide strong **ACID guarantees**
+
+**Typical use cases:**
+- Structured, tabular data
+- Financial and accounting systems
+- Applications requiring strong consistency and relationships
+
+Examples: PostgreSQL, MySQL, SQL Server
+
+---
+
+### Document Stores
+- Use **flexible or schema-less documents** (typically JSON)
+- Support nested data structures
+- Little or no join support
+- Easier horizontal scaling
+
+**Typical use cases:**
+- Semi-structured or evolving data
+- JSON-heavy applications
+- User profiles, logs, content management systems
+
+Examples: MongoDB, CouchDB
+
+## What is a SQL Join Operation? What other common SQL statements exist?
+
+A **SQL Join** operation combines rows from two or more tables using a related column (usually a foreign key).
+
+**Common join types:**
+- **INNER JOIN** – returns only matching rows from both tables
+- **LEFT JOIN** – returns all rows from the left table and matching rows from the right
+- **RIGHT JOIN** – returns all rows from the right table and matching rows from the left
+- **FULL OUTER JOIN** – returns all rows from both tables, matched where possible
+
+**Other common SQL statements:**
+- `SELECT` – retrieve data
+- `INSERT` – add new rows
+- `UPDATE` – modify existing rows
+- `DELETE` – remove rows
+- `WHERE` – filter records
+- `GROUP BY` – aggregate data
+- `HAVING` – filter aggregated results
+- `ORDER BY` – sort query results
+- `CREATE`, `ALTER`, `DROP` – manage database structures
+- `INDEX` – improve query performance
+- `TRANSACTION`, `COMMIT`, `ROLLBACK` – control transactions
+
+
