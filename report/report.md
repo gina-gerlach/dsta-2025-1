@@ -52,14 +52,20 @@
   - [What is the difference between a Relational Database and a Document Store?](#what-is-the-difference-between-a-relational-database-and-a-document-store)
   - [What is a SQL Join Operation? What other common SQL statements exist?](#what-is-a-sql-join-operation-what-other-common-sql-statements-exist)
 
-* **Milestone 3:**
-- [Task 2: Weights & Biases Integration and Model Training in Docker]
-  -[W&B Setup]
-  - [Docker Setup]
-  - [Training and Metrics]
-  - [Docker Execution]
-  - [Experimentation and W&B Logging]
-  - [W&B Dashboard Results]
+* **Milestone 4:**
+- [Task 1: Experiment Management and ML Metrics Fundamentals](#task-1-experiment-management-and-ml-metrics-fundamentals)
+  - [What is Experiment Management and why is it important?](#what-is-experiment-management-and-why-is-it-important)
+  - [What is a Metric in ML?](#what-is-a-metric-in-ml)
+  - [What is Precision and Recall? Why is there often a trade-off between them?](#what-is-precision-and-recall-why-is-there-often-a-trade-off-between-them)
+  - [What is AUROC Metric?](#what-is-auroc-metric)
+  - [What is a Confusion Matrix?](#what-is-a-confusion-matrix)
+- [Task 2: Weights & Biases Integration and Model Training in Docker](#task-2-weights--biases-integration-and-model-training-in-docker)
+  - [W&B Setup](#wb-setup)
+  - [Docker Setup](#docker-setup-1)
+  - [Training and Metrics](#training-and-metrics)
+  - [Docker Execution](#docker-execution)
+  - [Experimentation and W&B Logging](#experimentation-and-wb-logging)
+  - [W&B Dashboard Results](#wb-dashboard-results)
 
 ---
 # Milestone 1
@@ -1183,7 +1189,134 @@ A **SQL Join** operation combines rows from two or more tables using a related c
 - `TRANSACTION`, `COMMIT`, `ROLLBACK` – control transactions
 
 ---
-# Milestone 2
+# Milestone 4
+
+## Task 1: Experiment Management and ML Metrics Fundamentals
+
+### Experiment Management – what it is and why it matters
+
+Experiment management is basically about keeping track of what you're doing when you train machine-learning models. Every time you run an experiment, you're making choices: hyperparameters, data versions, model architecture, metrics, and even the environment you ran it in. Experiment management is the structured way of storing all of that so you don't lose track.
+
+**Why this is important:**
+
+- **Reproducibility**: You can actually rerun an experiment and get the same result, instead of guessing what you changed last time.
+- **Comparison**: It becomes much easier to compare different models or parameter settings in a systematic way.
+- **Collaboration**: Others (or future you) can understand what was done and build on it.
+- **Versioning**: You see how your model evolved over time, together with the code and data used.
+- **Better decisions**: You can base model choices on real results instead of gut feeling.
+- **Debugging**: If performance suddenly drops, you can trace back what changed.
+
+Tools like Weights & Biases, MLflow, or Neptune automate a lot of this by logging metrics, parameters, and artifacts automatically.
+
+### What is a metric in machine learning?
+
+A metric is just a number that tells you how well your model is doing. It translates predictions into something measurable so you can judge performance.
+
+Different tasks need different metrics:
+
+- **Classification**: Accuracy, Precision, Recall, F1-Score, AUROC
+- **Regression**: MSE, MAE, R²
+- **Ranking**: MAP, NDCG
+
+Good metrics should be:
+
+- **Task-specific**: Classification and regression need different metrics.
+- **Interpretable**: You should understand what the number actually means.
+- **Aligned with the goal**: Ideally, the metric reflects what matters in practice.
+
+For example, in MNIST digit classification, accuracy works well because the classes are balanced and we mainly care about overall correctness.
+
+### Precision and Recall – and why there's a trade-off
+
+Precision and recall are especially useful when classes are imbalanced or when different mistakes have different costs.
+
+**Precision answers:**
+
+"Out of everything the model predicted as positive, how much was actually positive?"
+
+```
+Precision = TP / (TP + FP)
+```
+
+High precision means few false alarms.
+
+**Recall answers:**
+
+"Out of all actual positives, how many did the model catch?"
+
+```
+Recall = TP / (TP + FN)
+```
+
+High recall means you miss very few true cases.
+
+**The trade-off** comes from the classification threshold:
+
+- If you **lower the threshold**, the model predicts "positive" more often → recall goes up, precision usually goes down.
+- If you **raise the threshold**, the model becomes stricter → precision goes up, recall usually goes down.
+
+**Examples:**
+
+- **Medical screening**: You want high recall so you don't miss sick patients, even if that means more false positives.
+- **Spam filters**: You want high precision so important emails aren't marked as spam, even if some spam slips through.
+
+The **F1-score** balances both:
+
+```
+F1 = 2 · (Precision · Recall) / (Precision + Recall)
+```
+
+### What is AUROC?
+
+AUROC (Area Under the ROC Curve) measures how well a classifier separates two classes across all possible thresholds.
+
+The **ROC curve** plots:
+
+- **True Positive Rate** (Recall) on the y-axis
+- **False Positive Rate** on the x-axis
+
+**AUROC values** are interpreted roughly as:
+
+- **1.0** → perfect classifier
+- **0.8–0.9** → good
+- **0.5** → random guessing
+
+**Why it's useful:**
+
+- It's threshold-independent
+- It works well with imbalanced data
+- It gives a single number to compare models
+
+For example, in fraud detection (where fraud is rare), a high AUROC means the model can still separate fraud from non-fraud well, no matter where you set the threshold.
+
+### What is a confusion matrix?
+
+A confusion matrix shows what the model got right and wrong, broken down by class.
+
+**For binary classification:**
+
+|            | Predicted No | Predicted Yes |
+|------------|--------------|---------------|
+| **Actual No**  | TN           | FP            |
+| **Actual Yes** | FN           | TP            |
+
+It lets you see:
+
+- **Correct predictions** (diagonal)
+- **Where the model is making mistakes** (off-diagonal)
+
+From the confusion matrix, you can directly compute:
+
+- Accuracy
+- Precision
+- Recall
+- F1-Score, specificity, etc.
+
+**For multi-class problems** like MNIST, it also shows which classes get confused with each other.
+
+**Example:** if "5" is often predicted as "3", that's a clear signal where the model struggles and where improvements might help.
+
+---
 
 ## Task 2: Weights & Biases Integration and Model Training in Docker
 
