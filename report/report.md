@@ -2,8 +2,12 @@
 **Course:** Data Science Toolkits and Architectures  
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
+
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
+
 **Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
+
+**Milestone 4** focuses on using Weights & Biases for experiment tracking, analyzing model performance with Python data science tools, and exploring neural network modifications while maintaining reproducible and collaborative workflows.
 
 ## Table of Contents
 * **Milestone 1:**
@@ -47,6 +51,16 @@
   - [What is ACID in the context of SQL Databases?](#what-is-acid-in-the-context-of-sql-databases)
   - [What is the difference between a Relational Database and a Document Store?](#what-is-the-difference-between-a-relational-database-and-a-document-store)
   - [What is a SQL Join Operation? What other common SQL statements exist?](#what-is-a-sql-join-operation-what-other-common-sql-statements-exist)
+
+* **Milestone 3:**
+- [Task 2: Weights & Biases Integration and Model Training in Docker]
+  -[W&B Setup]
+  - [Docker Setup]
+  - [Training and Metrics]
+  - [Docker Execution]
+  - [Experimentation and W&B Logging]
+  - [W&B Dashboard Results]
+
 ---
 # Milestone 1
 
@@ -1168,4 +1182,102 @@ A **SQL Join** operation combines rows from two or more tables using a related c
 - `INDEX` – improve query performance
 - `TRANSACTION`, `COMMIT`, `ROLLBACK` – control transactions
 
+---
+# Milestone 2
 
+## Task 2: Weights & Biases Integration and Model Training in Docker
+
+The goal of this task was to integrate Weights & Biases (W&B) for experiment tracking, metric logging, and model versioning in the MNIST training pipeline. A separate Dockerfile was created to containerize the W&B-enabled training workflow.
+
+### W&B Setup
+
+First, the wandb package was installed with ```pip install wandb``` and the version used was added to the requirements.txt. ```touch .env``` was used to create a secret file to store the W&B token. In the file this line of code was added: “WANDB_TOKEN=actualtokenhere". It was verified that .env was in the gitignore file to ensure that this document would not be published on Git Hub.
+
+### Docker Setup
+
+The following documents were created:
+
+- Dockerfile.wandb: A new Dockerfile was created specifically for W&B integration. It installs dependencies from requirements.txt, copies the project files, and sets an entrypoint script.
+
+- docker_entrypoint.sh: This shell script:
+  1. Logs into W&B using the token stored in .env.
+  2. Executes the W&B-enabled training script train_and_save_wandb.py.
+
+- train_and_save_wandb.py: An updated version of train_and_save.py which:
+  * Initializes a W&B run
+  * Logs hyperparameters (epochs, batch size, learning rate, optimizer)
+  * Logs metrics (accuracy) and training loss
+  * Saves the model both locally and uploads it to W&B
+  * Optionally logs the current Git commit hash for reproducibility
+
+### Training and Metrics
+
+**Hyperparameters**
+| Parameter      | Value | Notes                                |
+|----------------|-------|--------------------------------------|
+| Epochs         | 5     | Baseline training                     |
+| Batch size     | 128   | Standard batch size                   |
+| Learning rate  | 0.001 | Default for Adam optimizer            |
+| Optimizer      | Adam  | Explored variants: SGD                |
+| Loss function  | Sparse categorical crossentropy | Standard for multi-class classification |
+
+**Metrics Logged**
+- Accuracy: Evaluates classification performance (primary metric)
+- Loss: Monitors model convergence during training
+- Git commit hash added for reproducibility
+
+Accuracy was chosen as the metric because the MNIST task has balanced classes and because each image has only one true class. Since accuracy is the number of correct predictions divided by the total number of predictions, this metric captures the question of “did the model predict the right digit?”
+
+### Docker Execution
+
+1. Build the Docker image:
+```bash
+docker build -t mnist_wandb -f Dockerfile.wandb .
+```
+2. Run the container, loading the W&B token:
+```bash
+docker run --env-file .env mnist_wandb
+```
+3. Inside the container:
+    * Logs into W&B
+    * Trains the MNIST model
+    * Saves the trained model locally and uploads it to W&B
+    * Logs metrics and hyperparameters
+  
+### Experimentation and W&B Logging
+
+We played with the  Neural Network, by changing parameters and its architecture. Each variation was logged automatically to W&B, allowing structured tracking and comparison.
+
+Modifications applied:
+   * Optimizer: Compared performance using Adam and SGD.
+   * Batch size: Tested different batch sizes (64, 128).
+   * Architecture: Extra layer added or not.
+
+Logging and comparison with W&B:
+   * Each run was configured with the chosen hyperparameters and architecture changes.
+   * W&B automatically recorded metrics such as training loss, validation loss, accuracy, and validation accuracy for every run.
+
+### W&B Dashboard Results
+
+| Run | Batch Size | Optimizer | Extra Layer | Test Accuracy | Test Loss | Observations |
+|-----|------------|-----------|-------------|---------------|-----------|--------------|
+| 1   | 128        | Adam      | No          | 0.9883        | 0.0357    | High accuracy with Adam. Fast convergence. Validation accuracy very close to training accuracy. |
+| 2   | 128        | SGD       | No          | 0.7705        | 1.5307    | SGD struggles with default learning rate. Slower convergence, much higher loss. |
+| 3   | 64         | Adam      | Yes         | 0.9893        | 0.0297    | Slight improvement over baseline. Extra layer helps slightly; smaller batch size may stabilize training. |
+| 4   | 64         | SGD       | Yes         | 0.8268        | 0.7268    | Extra layer improves over SGD baseline, but still much lower than Adam. Smaller batch helps, but optimizer dominates. |
+
+**Key Observations**
+   1. Optimizer effect
+       * Adam consistently outperforms SGD with the same number of epochs and default learning rate.
+       * SGD shows slow convergence and high loss, especially with larger batch size.
+   2. Batch size effect
+       * Reducing batch size from 128 → 64 slightly improves performance for Adam and helps SGD slightly.
+       * Smaller batches may improve generalization but take slightly longer per epoch.
+   3. Extra layer effect
+       * Adding an extra dense layer before the output slightly improved accuracy for Adam.
+       * For SGD, it improves performance, but the optimizer limitation still dominates.
+   4. Loss vs accuracy trends
+       * For Adam, both training and validation loss decrease smoothly and accuracy rises steadily.
+       * For SGD, loss remains higher and fluctuates more; validation accuracy lags significantly behind training.
+
+Overall, the optimizer choice has the largest effect on performance. Adam converges fast and achieves high accuracy, while SGD struggles without tuning. Architectural tweaks (extra layer) and batch size changes only give minor improvements, mainly noticeable when using a good optimizer.
