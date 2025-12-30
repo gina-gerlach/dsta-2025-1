@@ -3,7 +3,7 @@
 **Authors:** Gina Gerlach & Sven Regli  
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
-**Milestone 3** focuses on multi docker applications and PostgresDB
+**Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 ## Table of Contents
 * **Milestone 1:**
@@ -17,21 +17,23 @@
 - [8. Create Report and src Folder](#8-create-report-and-src-folder)
 - [9. Issues and how they were solved](#9-issues-and-how-they-were-solved)
 - [11. Tag and Release](#11-tag-and-release)
-...
+
 * **Milestone 2:**
-- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branc-and-update)
+- [12. .gitignore Dev Branch and Update](#12-gitignore-dev-branch-and-update)
 - [13. Conceptual Questions](#13-conceptual-questions)
-- [14. Code Modularization and Refactoring](#14-code-modularization-and-refactoring)
+- [14. Code Modularization and Refactoring](#task-3-code-modularization-and-refactoring)
 - [15. pip Requirement File and Virtual Environment](#15-pip-requirement-file-and-virtual-environment)
-- [16. Dockerization](#16-dockerization)
+- [16. Dockerization](#dockerization)
 - [17. Testing "Dockerized" Code](#17-testing-dockerized-code)
 - [18. Tag and Release](#18-tag-and-release)
-...
-* **Milestone 3:**
-- [19. Docker-compose installation and questions](#19-Docker-compose-installation-and-questions)
-- [20. PostgresSQL and pgAdmin questions, installation and test](#20-PostgresSQL-and-pgAdmin-questions-installation-and-test)
 
 * **Milestone 3:**
+- [Task 1: Docker-compose Installation and Questions](#task-1-docker-compose-installation-and-questions)
+- [Task 2: PostgreSQL and pgAdmin Questions, Installation and Test](#task-2-postgresql-and-pgadmin-questions-installation-and-test)
+- [Task 3: Image Storage in PostgreSQL](#task-3-image-storage-in-postgresql)
+  - [The Impedance Mismatch Problem](#the-impedance-mismatch-problem)
+  - [MNIST Dataset Structure](#mnist-dataset-structure)
+  - [Database Table Design](#database-table-design)
 - [Task 4: Multi-Docker Container Application](#task-4-multi-docker-container-application)
   - [Architecture Overview](#architecture-overview)
   - [Database Schema](#database-schema)
@@ -516,6 +518,279 @@ PyPI, or the Python Package Index, is the central repository for Python software
 - Documentation: Should have a README, Application Programming Interface (API) docs, and usage examples/tutoritals.
 
 # Milestone 3
+## Task 1: Docker-compose Installation and Questions
+
+Task 1 introduces Docker Compose, a tool for defining and running multi-container Docker applications. This task explores service orchestration, network communication between containers, and port mapping.
+
+**Docker Compose version installed:** v2.40.3
+
+### Which services are being used for the application (described in the link above)? How do they relate to the host names in terms of computer networks?
+
+The Compose file defines two services: `web` and `redis`. 
+`web` runs a Flask application. It handles HTTP requests from the browser and for each request calls Redis to increment a counter. 
+`redis` is the server or database. It stores the counter value and listens for connections from web on its default port 6379.
+
+Each service runs in its own container and Docker configures an internal network where each container is reachable by a hostname that’s identical to its service name. 
+
+So, `web` connects to the `redis` service using the hostname `redis` on port 6379, just like computers on a normal network use hostnames to read each other.
+ 
+### What ports are being used (within the application and in the docker-compose file)?
+
+|   | **application**  | **docker-compose**  |
+|:---|:---|:---|
+| `web`  | 5000 (default port for Flask web server)  | 8000:5000 (host port:container port) | 
+| `redis`  | 6379 (default port)  | N/A redis doesn’t talk directly with host computers  |
+
+### How does the host machine (e.g. your computer) communicate with the application inside the
+Docker container. Which ports are exposed from the application to the host machine?
+
+The host machine communicates with the Flask app via the mapped ports listed above (8000:5000). The application listens on port 5000 inside the web container while Docker forwards traffic from localhost:8000 to the internal port 5000. That way when you open http:localhost:8000/ in a browser the request reaches the Flask app inside the container. The only port exposed from the application to the host in this example is host port 8000 mapped to container port 5000 on the web service.
+
+### What is localhost, why is it useful in the domain of web applications?
+
+`localhost` is the standard hostname that refers to the local machine. It’s useful because it allows you to test web applications locally before deploying them to remote servers.
+
+## Task 2: PostgreSQL and pgAdmin Questions, Installation and Test
+
+Task 2 focuses on setting up and interacting with a PostgreSQL database running in a Docker container. This includes using Python adapters to programmatically interact with the database and using pgAdmin as a graphical management tool.
+
+### What is PostgreSQL? Is it SQL or no-SQL (why?)
+
+It is an open-sourced object-relational database management system. It is SQL because it organizes data in relational tables with rows, columns and keys and uses SQL for defining and querying data. This is different from no-SQL databases (like Mongo or Redis) as they typically store data in formats like document or graph without fixed table schemas and use non-SQL query models.
+
+
+### Run a PostgreSQL Server (with the most current version) using a Docker image from the official PostgreSQL Docker Hub page
+
+Pull the latest official image:
+
+```bash
+docker pull postgres:latest
+```
+
+Create a user-defined Docker network so containers resolve each other by name (important for later steps):
+
+```bash
+docker network create pg-net
+```
+
+Run a container:
+
+```bash
+docker run --name my-postgres --network pg-net \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=postgres \
+  -p 5432:5432 \
+  -d postgres:latest
+```
+This code sets the container name, custom network, username, password and default database. It maps the host port 5432 to container port 5432 and runs the container in detached mode.
+
+### Make sure you expose the correct ports when running the Docker container (read the documentation on
+Docker Hub)
+
+PostgreSQL listens on port 5432 inside the container by default. The `-p` flag maps the host port 5432 (`localhost:5432`) to the container port 5432. If the host port was in use you could map a different host port by running `-p 5450:5432`. 
+
+### Find an appropriate Python package (Postgres adapter) that allows you to communicate with the
+database server
+
+`psycopg2-binary` will be used as the ProgresSQL adaptor. It follows all the requirements for a high-quality package as outlined in Milestone 2.
+https://pypi.org/project/psycopg2/
+
+Added to the requirements.txt then installed with
+```bash
+pip install -r requirements.txt
+```
+
+### Write a little python script
+
+In /src I created “postgres_jokes.py” that connects to the database server using "localhost:port”, creates a database called "ms3_jokes”, creates a Table called "jokes". The table should have an attribute "ID" which is it's primary key and another Attribute "JOKE" of character type "TEXT”, inserts your favorite joke into that table, selects your favorite joke (now in the database), and fetches it from the database and prints your favorite joke. 
+
+Checked this script locally 
+```bash
+Python3 postgres_jokes.py
+```
+Which resulted in
+
+```
+Created database 'ms3_jokes'
+Created table 'jokes'
+Inserted joke with ID 1
+Your joke from database: How much did the pirate pay to get his ears pierced? A buccaneer!
+```
+### Download the pgADMIN Tool (https://www.pgadmin.org/download/). It also exists as a Docker Image :).
+Connect to your running PostgreSQL Database. Can you see your database and table?
+
+Downloaded pgADMIN with
+```bash
+docker pull dpage/pgadmin4:latest
+```
+
+Then ran the pgADMIN container with
+```bash
+docker run --name pgadmin --network pg-net \
+  -p 8080:80 \
+  -e PGADMIN_DEFAULT_EMAIL=admin@example.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  -d dpage/pgadmin4
+```
+
+Opened with http:/localhost:8080 and added a new server. In the connection section I set all values according to the my-postgres container. After this I was able to see my database and joke.
+
+###  If you stopped and deleted the Docker container running the database and restarted it. Would your joke still be in the database? Why or why not?
+
+If you only stop and start the same container, then yes the joke is still there because the data directory inside that container is preserved. But if you delete the container without a named volume then everything inside it is deleted including the PostgreSQL database and tables.
+
+### Issues and How They Were Solved
+
+Originally when I tried to set up pgAdmin I didn't add the network until later and wound up creating some unnecessary containers. I corrected this by searching the error messages that came up in pgAdmin when I tried to add a new server and then I removed all of my docker containers and networks and started fresh, which included rerunning the python script.
+
+## Task 3: Image Storage in PostgreSQL
+
+Task 3 explores how to store image data in a relational database like PostgreSQL, addressing the "impedance mismatch" problem between object-oriented representations (NumPy arrays) and relational tables.
+
+### Question 1: Dataset Structure
+
+**How is the MNIST data structured?**
+
+The MNIST dataset contains 70,000 28×28 pixel grayscale images. They can be loaded as NumPy arrays with Keras:
+
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+
+**Dataset characteristics:**
+- Training samples: 60,000 images
+- Test samples: 10,000 images
+- Image shape: 28×28×1 (height × width × channels)
+- Pixel values: Normalized float32 in range [0, 1]
+- Labels: Integer 0-9 representing digits
+
+### Question 2: Database Table Design
+
+**How would you define relational database tables to save your data? What kind of data types could you use?**
+
+To store MNIST images in PostgreSQL, we use binary serialization. Images need to be converted to BYTEA (binary data) using serialization, then reversed on retrieval. NumPy's serialization (`np.save()`) provides an effective way to transform image arrays into bytes.
+
+#### Basic Table Schema
+
+| Attribute | Data Type | Purpose |
+|-----------|-----------|---------|
+| `id` | `SERIAL PRIMARY KEY` | Auto-incrementing unique identifier for each image |
+| `image_data` | `BYTEA` | Binary storage of serialized NumPy array (28×28 image) |
+| `true_label` | `INTEGER` | The actual digit (0-9) in the image |
+| `image_shape` | `VARCHAR(50)` | Shape metadata for validation (e.g., "(28, 28, 1)") |
+| `created_at` | `TIMESTAMP` | Timestamp when the image was inserted |
+
+**Why BYTEA?**
+This approach is more efficient than flattening into 784 individual columns or storing as text.
+
+### Question 3: Additional Attributes for Querying
+
+**What additional attributes might make sense to easily query your data (e.g., find all pictures of digit 7)?**
+
+Additional attributes that may assist in query may be:
+
+| *Attribute*  | *Data Type*  | *Purpose*  | *Example* |
+|---|---|---|---|
+| dataset_split  | TEXT  | Indicate if image is training or test set | Find only train images |
+| label | INTEGER  | 0-9 digit class | Find all 7s |
+| image_index  | INTEGER | Original dataset index  | Track original dataset position |
+
+### The Impedance Mismatch Problem
+
+The "impedance mismatch" problem occurs when trying to store object-oriented or array-based data (like images in Python) into relational databases (which use tables with rows and columns). This is similar to the serialization/deserialization process used when transmitting data over networks.
+
+#### How to Represent/Transform Image Data for Relational Databases
+
+**Problem:**
+- Python/NumPy represents images as multi-dimensional arrays (e.g., 28×28×1 for MNIST)
+- PostgreSQL stores data in tabular format with specific data types
+- Direct storage of NumPy arrays is not possible
+
+**Solution: Binary Serialization**
+
+We transform image data using the following approach:
+
+1. **Serialization (Python → Database):**
+   ```python
+   def serialize_image(image_array: np.ndarray) -> bytes:
+       buffer = io.BytesIO()
+       np.save(buffer, image_array)
+       return buffer.getvalue()
+   ```
+   - Convert NumPy array to bytes using NumPy's built-in serialization
+   - Store in PostgreSQL `BYTEA` (binary data) column
+
+2. **Deserialization (Database → Python):**
+   ```python
+   def deserialize_image(image_bytes: bytes) -> np.ndarray:
+       buffer = io.BytesIO(image_bytes)
+       return np.load(buffer, allow_pickle=False)
+   ```
+   - Retrieve bytes from database
+   - Reconstruct NumPy array using NumPy's load function
+
+**Alternative Approaches:**
+- **JSON encoding:** Convert array to JSON (less efficient for large arrays)
+- **Base64 encoding:** Encode bytes as text but this is less efficient
+- **External file storage:** Store images as files, reference paths in database
+- **Specialized databases:** Use PostgreSQL extensions like `cube` or dedicated image databases
+
+
+**How Data is Loaded:**
+```python
+from tensorflow import keras
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+```
+- Downloaded automatically from Keras
+- Cached locally for subsequent runs
+- Preprocessed: normalized and reshaped
+
+### Database Table Design
+
+#### PostgreSQL Data Types Used
+
+| Data Type | Usage | Rationale |
+|-----------|-------|-----------|
+| `SERIAL` | Primary keys (`id`) | Auto-incrementing integer, ensures uniqueness |
+| `BYTEA` | Image data, probability arrays | Binary data storage for serialized NumPy arrays |
+| `INTEGER` | Labels, predictions | Digit classification (0-9) |
+| `REAL` | Confidence scores | Floating-point for probability values |
+| `VARCHAR(50)` | Image shape metadata | Store shape as string for validation |
+| `TIMESTAMP` | Creation timestamps | Track when data was inserted |
+
+#### Table Attributes for Querying
+
+**Indexes for Performance:**
+```sql
+-- Find all images of a specific digit
+CREATE INDEX idx_input_data_label ON input_data(true_label);
+
+-- Find predictions for a specific digit
+CREATE INDEX idx_predictions_label ON predictions(predicted_label);
+
+-- Link predictions to input data efficiently
+CREATE INDEX idx_predictions_input ON predictions(input_data_id);
+```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
+
+**Query Examples:**
+```sql
+-- Find all images of the digit 7
+SELECT * FROM input_data WHERE true_label = 7;
+
+-- Find all incorrect predictions
+SELECT p.*, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id
+WHERE p.predicted_label != i.true_label;
+
+-- Find predictions with low confidence
+SELECT * FROM predictions WHERE confidence < 0.8;
+```
  
 ## Task 4: Multi-Docker Container Application
 
