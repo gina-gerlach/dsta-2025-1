@@ -66,6 +66,11 @@
   - [Docker Execution](#docker-execution)
   - [Experimentation and W&B Logging](#experimentation-and-wb-logging)
   - [W&B Dashboard Results](#wb-dashboard-results)
+- [Task 3: MNIST Analysis and Model Evaluation](#task-3-mnist-analysis-and-model-evaluation)
+  - [Objectives](#objectives)
+  - [Key Analyses Performed](#key-analyses-performed)
+  - [Results Summary](#results-summary)
+  - [Technical Implementation](#technical-implementation)
 
 ---
 # Milestone 1
@@ -1414,3 +1419,85 @@ Logging and comparison with W&B:
        * For SGD, loss remains higher and fluctuates more; validation accuracy lags significantly behind training.
 
 Overall, the optimizer choice has the largest effect on performance. Adam converges fast and achieves high accuracy, while SGD struggles without tuning. Architectural tweaks (extra layer) and batch size changes only give minor improvements, mainly noticeable when using a good optimizer.
+
+---
+
+## Task 3: MNIST Analysis and Model Evaluation
+
+Task 3 focuses on analyzing the MNIST dataset and evaluating model performance using Jupyter Notebook together with NumPy, Matplotlib, and Scikit-Learn. The goal is not just to look at accuracy numbers, but to really understand the data, the predictions, and where the model makes mistakes, mainly through visual analysis.
+
+### Objectives
+
+In this task, we:
+
+- Loaded and explored the MNIST dataset using NumPy arrays
+- Analyzed the distribution of pixel values and digit labels
+- Visualized sample images and computed average representations for each digit
+- Loaded trained models from Weights & Biases
+- Generated predictions on the test set and evaluated model performance
+- Used confusion matrices to identify systematic misclassifications
+
+### Key Analyses Performed
+
+**1. Dataset Exploration**
+
+- Training set contains 60,000 images, each with size 28×28 pixels (grayscale)
+- Test set contains 10,000 images
+- Pixel values range from 0 to 255 and are normalized to 0–1 before training
+- The dataset is well balanced across all 10 digit classes
+
+**2. Pixel Value Distribution**
+
+- Most pixels are either 0 (black background) or 255 (white foreground)
+- Intermediate gray values mainly appear at edges
+
+**3. Model Integration**
+
+The notebook automatically loads the best-performing model from Weights & Biases:
+
+- Uses the W&B API to access experiment runs
+- Selects the run with the highest validation accuracy
+- Downloads the corresponding model artifact for evaluation
+- Falls back to a local model file if W&B is not available
+
+This setup makes the evaluation reproducible and independent of a single local file.
+
+**4. Performance Visualizations**
+
+Several visualizations are used to better understand model behavior:
+
+- Sample predictions, showing both correct and incorrect classifications
+- Confusion matrix, highlighting which digits are most often confused
+- Normalized confusion matrix, showing error rates per digit
+- Per-class accuracy bar chart, comparing performance across digits
+- Average digit images, visualizing the "typical" shape of each digit
+
+### Results Summary
+
+**Model Performance**
+
+- Overall test accuracy is around 98–99%, depending on the selected W&B run
+- Most digits achieve accuracies above 95%
+
+**Common Misclassifications**
+
+- Errors mainly occur between visually similar digits (e.g. 3 vs 8, 4 vs 9, 5 vs 3)
+- Many mistakes are caused by ambiguous or poorly written digits
+- Displaying Prediction confidence scores help identify uncertain cases
+
+**Classification Report**
+
+- Precision and recall are high across all digit classes
+- F1-scores are typically above 0.98
+- Performance is well balanced, with no digit class standing out as particularly weak
+
+### Technical Implementation
+
+**Tools Used**
+
+- **NumPy**: data handling and basic statistical analysis
+- **Matplotlib**: plotting images, histograms, and confusion matrices
+- **Seaborn**: improved visualization styling
+- **Scikit-Learn**: confusion matrices and classification reports
+- **Weights & Biases API**: loading trained model artifacts
+
