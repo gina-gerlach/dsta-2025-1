@@ -240,3 +240,8 @@ desktop.ini
 *~
 .nfs*
 .Trash-*
+
+#folders
+/artifacts/
+/models
+/wandb
