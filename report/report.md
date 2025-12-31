@@ -4,6 +4,7 @@
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
+**Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 **Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
@@ -598,6 +599,9 @@ Create a user-defined Docker network so containers resolve each other by name (i
 ```bash
 docker network create pg-net
 ```
+- Downloaded automatically from Keras
+- Cached locally for subsequent runs
+- Preprocessed: normalized and reshaped
 
 Run a container:
 
@@ -626,6 +630,28 @@ Added to the requirements.txt then installed with
 ```bash
 pip install -r requirements.txt
 ```
+- **Behavior:** Waits until the container exits with status code 0
+- **Use Case:** Initialization scripts, database migrations
+- **Example:** One-time setup containers
+
+**Query Examples:**
+```sql
+-- Find all images of the digit 7
+SELECT * FROM input_data WHERE true_label = 7;
+
+-- Find all incorrect predictions
+SELECT p.*, i.true_label
+FROM predictions p
+JOIN input_data i ON p.input_data_id = i.id
+WHERE p.predicted_label != i.true_label;
+
+-- Find predictions with low confidence
+SELECT * FROM predictions WHERE confidence < 0.8;
+```
+ 
+## Task 4: Multi-Docker Container Application
+
+### Architecture Overview
 
 ### Write a little python script
 
