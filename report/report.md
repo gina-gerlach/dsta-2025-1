@@ -52,14 +52,26 @@
   - [What is the difference between a Relational Database and a Document Store?](#what-is-the-difference-between-a-relational-database-and-a-document-store)
   - [What is a SQL Join Operation? What other common SQL statements exist?](#what-is-a-sql-join-operation-what-other-common-sql-statements-exist)
 
-* **Milestone 3:**
-- [Task 2: Weights & Biases Integration and Model Training in Docker]
-  -[W&B Setup]
-  - [Docker Setup]
-  - [Training and Metrics]
-  - [Docker Execution]
-  - [Experimentation and W&B Logging]
-  - [W&B Dashboard Results]
+* **Milestone 4:**
+- [Task 1: Experiment Management and ML Metrics Fundamentals](#task-1-experiment-management-and-ml-metrics-fundamentals)
+  - [What is Experiment Management and why is it important?](#what-is-experiment-management-and-why-is-it-important)
+  - [What is a Metric in ML?](#what-is-a-metric-in-ml)
+  - [What is Precision and Recall? Why is there often a trade-off between them?](#what-is-precision-and-recall-why-is-there-often-a-trade-off-between-them)
+  - [What is AUROC Metric?](#what-is-auroc-metric)
+  - [What is a Confusion Matrix?](#what-is-a-confusion-matrix)
+- [Task 2: Weights & Biases Integration and Model Training in Docker](#task-2-weights--biases-integration-and-model-training-in-docker)
+  - [W&B Setup](#wb-setup)
+  - [Docker Setup](#docker-setup-1)
+  - [Training and Metrics](#training-and-metrics)
+  - [Docker Execution](#docker-execution)
+  - [Experimentation and W&B Logging](#experimentation-and-wb-logging)
+  - [W&B Dashboard Results](#wb-dashboard-results)
+- [Task 3: MNIST Analysis and Model Evaluation](#task-3-mnist-analysis-and-model-evaluation)
+  - [Objectives](#objectives)
+  - [Key Analyses Performed](#key-analyses-performed)
+  - [Results Summary](#results-summary)
+  - [Technical Implementation](#technical-implementation)
+  - [Version Controlling Jupyter Notebooks with Git – Experience and Challenges](#version-controlling-jupyter-notebooks-with-git-–-experience-and-challenges)
 
 ---
 # Milestone 1
@@ -1183,7 +1195,134 @@ A **SQL Join** operation combines rows from two or more tables using a related c
 - `TRANSACTION`, `COMMIT`, `ROLLBACK` – control transactions
 
 ---
-# Milestone 2
+# Milestone 4
+
+## Task 1: Experiment Management and ML Metrics Fundamentals
+
+### Experiment Management – what it is and why it matters
+
+Experiment management is basically about keeping track of what you're doing when you train machine-learning models. Every time you run an experiment, you're making choices: hyperparameters, data versions, model architecture, metrics, and even the environment you ran it in. Experiment management is the structured way of storing all of that so you don't lose track.
+
+**Why this is important:**
+
+- **Reproducibility**: You can actually rerun an experiment and get the same result, instead of guessing what you changed last time.
+- **Comparison**: It becomes much easier to compare different models or parameter settings in a systematic way.
+- **Collaboration**: Others (or future you) can understand what was done and build on it.
+- **Versioning**: You see how your model evolved over time, together with the code and data used.
+- **Better decisions**: You can base model choices on real results instead of gut feeling.
+- **Debugging**: If performance suddenly drops, you can trace back what changed.
+
+Tools like Weights & Biases, MLflow, or Neptune automate a lot of this by logging metrics, parameters, and artifacts automatically.
+
+### What is a metric in machine learning?
+
+A metric is just a number that tells you how well your model is doing. It translates predictions into something measurable so you can judge performance.
+
+Different tasks need different metrics:
+
+- **Classification**: Accuracy, Precision, Recall, F1-Score, AUROC
+- **Regression**: MSE, MAE, R²
+- **Ranking**: MAP, NDCG
+
+Good metrics should be:
+
+- **Task-specific**: Classification and regression need different metrics.
+- **Interpretable**: You should understand what the number actually means.
+- **Aligned with the goal**: Ideally, the metric reflects what matters in practice.
+
+For example, in MNIST digit classification, accuracy works well because the classes are balanced and we mainly care about overall correctness.
+
+### Precision and Recall – and why there's a trade-off
+
+Precision and recall are especially useful when classes are imbalanced or when different mistakes have different costs.
+
+**Precision answers:**
+
+"Out of everything the model predicted as positive, how much was actually positive?"
+
+```
+Precision = TP / (TP + FP)
+```
+
+High precision means few false alarms.
+
+**Recall answers:**
+
+"Out of all actual positives, how many did the model catch?"
+
+```
+Recall = TP / (TP + FN)
+```
+
+High recall means you miss very few true cases.
+
+**The trade-off** comes from the classification threshold:
+
+- If you **lower the threshold**, the model predicts "positive" more often → recall goes up, precision usually goes down.
+- If you **raise the threshold**, the model becomes stricter → precision goes up, recall usually goes down.
+
+**Examples:**
+
+- **Medical screening**: You want high recall so you don't miss sick patients, even if that means more false positives.
+- **Spam filters**: You want high precision so important emails aren't marked as spam, even if some spam slips through.
+
+The **F1-score** balances both:
+
+```
+F1 = 2 · (Precision · Recall) / (Precision + Recall)
+```
+
+### What is AUROC?
+
+AUROC (Area Under the ROC Curve) measures how well a classifier separates two classes across all possible thresholds.
+
+The **ROC curve** plots:
+
+- **True Positive Rate** (Recall) on the y-axis
+- **False Positive Rate** on the x-axis
+
+**AUROC values** are interpreted roughly as:
+
+- **1.0** → perfect classifier
+- **0.8–0.9** → good
+- **0.5** → random guessing
+
+**Why it's useful:**
+
+- It's threshold-independent
+- It works well with imbalanced data
+- It gives a single number to compare models
+
+For example, in fraud detection (where fraud is rare), a high AUROC means the model can still separate fraud from non-fraud well, no matter where you set the threshold.
+
+### What is a confusion matrix?
+
+A confusion matrix shows what the model got right and wrong, broken down by class.
+
+**For binary classification:**
+
+|            | Predicted No | Predicted Yes |
+|------------|--------------|---------------|
+| **Actual No**  | TN           | FP            |
+| **Actual Yes** | FN           | TP            |
+
+It lets you see:
+
+- **Correct predictions** (diagonal)
+- **Where the model is making mistakes** (off-diagonal)
+
+From the confusion matrix, you can directly compute:
+
+- Accuracy
+- Precision
+- Recall
+- F1-Score, specificity, etc.
+
+**For multi-class problems** like MNIST, it also shows which classes get confused with each other.
+
+**Example:** if "5" is often predicted as "3", that's a clear signal where the model struggles and where improvements might help.
+
+---
 
 ## Task 2: Weights & Biases Integration and Model Training in Docker
 
@@ -1281,3 +1420,110 @@ Logging and comparison with W&B:
        * For SGD, loss remains higher and fluctuates more; validation accuracy lags significantly behind training.
 
 Overall, the optimizer choice has the largest effect on performance. Adam converges fast and achieves high accuracy, while SGD struggles without tuning. Architectural tweaks (extra layer) and batch size changes only give minor improvements, mainly noticeable when using a good optimizer.
+
+---
+
+## Task 3: MNIST Analysis and Model Evaluation
+
+Task 3 focuses on analyzing the MNIST dataset and evaluating model performance using Jupyter Notebook together with NumPy, Matplotlib, and Scikit-Learn. The goal is not just to look at accuracy numbers, but to really understand the data, the predictions, and where the model makes mistakes, mainly through visual analysis.
+
+### Objectives
+
+In this task, we:
+
+- Loaded and explored the MNIST dataset using NumPy arrays
+- Analyzed the distribution of pixel values and digit labels
+- Visualized sample images and computed average representations for each digit
+- Loaded trained models from Weights & Biases
+- Generated predictions on the test set and evaluated model performance
+- Used confusion matrices to identify systematic misclassifications
+
+### Key Analyses Performed
+
+**1. Dataset Exploration**
+
+- Training set contains 60,000 images, each with size 28×28 pixels (grayscale)
+- Test set contains 10,000 images
+- Pixel values range from 0 to 255 and are normalized to 0–1 before training
+- The dataset is well balanced across all 10 digit classes
+
+**2. Pixel Value Distribution**
+
+- Most pixels are either 0 (black background) or 255 (white foreground)
+- Intermediate gray values mainly appear at edges
+
+**3. Model Integration**
+
+The notebook automatically loads the best-performing model from Weights & Biases:
+
+- Uses the W&B API to access experiment runs
+- Selects the run with the highest validation accuracy
+- Downloads the corresponding model artifact for evaluation
+- Falls back to a local model file if W&B is not available
+
+This setup makes the evaluation reproducible and independent of a single local file.
+
+**4. Performance Visualizations**
+
+Several visualizations are used to better understand model behavior:
+
+- Sample predictions, showing both correct and incorrect classifications
+- Confusion matrix, highlighting which digits are most often confused
+- Normalized confusion matrix, showing error rates per digit
+- Per-class accuracy bar chart, comparing performance across digits
+- Average digit images, visualizing the "typical" shape of each digit
+
+### Results Summary
+
+**Model Performance**
+
+- Overall test accuracy is around 98–99%, depending on the selected W&B run
+- Most digits achieve accuracies above 95%
+
+**Common Misclassifications**
+
+- Errors mainly occur between visually similar digits (e.g. 3 vs 8, 4 vs 9, 5 vs 3)
+- Many mistakes are caused by ambiguous or poorly written digits
+- Displaying Prediction confidence scores help identify uncertain cases
+
+**Classification Report**
+
+- Precision and recall are high across all digit classes
+- F1-scores are typically above 0.98
+- Performance is well balanced, with no digit class standing out as particularly weak
+
+### Technical Implementation
+
+**Tools Used**
+
+- **NumPy**: data handling and basic statistical analysis
+- **Matplotlib**: plotting images, histograms, and confusion matrices
+- **Seaborn**: improved visualization styling
+- **Scikit-Learn**: confusion matrices and classification reports
+- **Weights & Biases API**: loading trained model artifacts
+
+**Key Implementation Details**
+
+- Loading models directly from W&B artifacts with a local fallback option
+- Normalizing and reshaping test data before inference
+- Running batch predictions on the full test set
+- Using boolean indexing to separate correct and incorrect predictions
+- Normalizing confusion matrices to improve interpretability
+
+### Version Controlling Jupyter Notebooks with Git – Experience and Challenges
+
+Using Git to version control Jupyter notebooks turned out to be more challenging than versioning regular Python source files. Although notebooks are very convenient for interactive data analysis and visualization, they are not well suited for traditional line-based version control systems such as Git.
+
+One main reason is that Jupyter notebooks are stored as large JSON files. Besides the actual code and Markdown text, they also contain cell outputs, execution counters, images, plots, and additional metadata. As a result, even small changes in the notebook, such as re-running a cell or changing the execution order, can lead to large and hard-to-read diffs in Git. In our case, just a few output cells already accumulated to over 1,000 lines of JSON data, making it very inefficient to track meaningful changes.
+
+Another issue is that outputs are stored directly inside the notebook. When plots, tables, or confusion matrices are regenerated, Git often detects many changes, even though the underlying code stayed the same. This makes it difficult to identify meaningful code changes and leads to noisy commit histories. In collaborative settings, this can also cause frequent merge conflicts that are hard to resolve manually.
+
+In this task, we intentionally kept the outputs in the notebooks and versioned them in Git in order to directly show plots, distributions, and confusion matrices without requiring the code to be re-executed. This was especially useful in case there were issues accessing the training runs, for example due to missing or restricted access tokens. At the same time, this approach highlights the core problem of using Git with Jupyter notebooks: the diffs often show large changes in the notebook file even when the actual code has only changed minimally.
+
+Overall, while Git can be used to version control Jupyter notebooks, the experience is generally worse compared to plain source code files. Tools such as ReviewNB or nbdime can improve notebook diffs. In professional workflows, outputs are often removed before committing notebooks to Git, and notebooks are mainly used for exploration and visualization, while the main logic is implemented in separate Python scripts. This workflow is also recommended in several best-practice blogs, such as Medium articles on Jupyter notebook best practices and the ReviewNB guide on version controlling notebooks.
+
+**References:**
+
+- https://www.reviewnb.com/git-jupyter-notebook-ultimate-guide
+- https://medium.com/@jaydeepdnai.imscit20/best-practices-for-jupyter-notebooks-b6118e21d152
+
