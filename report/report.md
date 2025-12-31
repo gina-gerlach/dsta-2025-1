@@ -71,6 +71,7 @@
   - [Key Analyses Performed](#key-analyses-performed)
   - [Results Summary](#results-summary)
   - [Technical Implementation](#technical-implementation)
+  - [Version Controlling Jupyter Notebooks with Git – Experience and Challenges](#version-controlling-jupyter-notebooks-with-git-–-experience-and-challenges)
 
 ---
 # Milestone 1
@@ -1500,4 +1501,29 @@ Several visualizations are used to better understand model behavior:
 - **Seaborn**: improved visualization styling
 - **Scikit-Learn**: confusion matrices and classification reports
 - **Weights & Biases API**: loading trained model artifacts
+
+**Key Implementation Details**
+
+- Loading models directly from W&B artifacts with a local fallback option
+- Normalizing and reshaping test data before inference
+- Running batch predictions on the full test set
+- Using boolean indexing to separate correct and incorrect predictions
+- Normalizing confusion matrices to improve interpretability
+
+### Version Controlling Jupyter Notebooks with Git – Experience and Challenges
+
+Using Git to version control Jupyter notebooks turned out to be more challenging than versioning regular Python source files. Although notebooks are very convenient for interactive data analysis and visualization, they are not well suited for traditional line-based version control systems such as Git.
+
+One main reason is that Jupyter notebooks are stored as large JSON files. Besides the actual code and Markdown text, they also contain cell outputs, execution counters, images, plots, and additional metadata. As a result, even small changes in the notebook, such as re-running a cell or changing the execution order, can lead to large and hard-to-read diffs in Git. In our case, just a few output cells already accumulated to over 1,000 lines of JSON data, making it very inefficient to track meaningful changes.
+
+Another issue is that outputs are stored directly inside the notebook. When plots, tables, or confusion matrices are regenerated, Git often detects many changes, even though the underlying code stayed the same. This makes it difficult to identify meaningful code changes and leads to noisy commit histories. In collaborative settings, this can also cause frequent merge conflicts that are hard to resolve manually.
+
+In this task, we intentionally kept the outputs in the notebooks and versioned them in Git in order to directly show plots, distributions, and confusion matrices without requiring the code to be re-executed. This was especially useful in case there were issues accessing the training runs, for example due to missing or restricted access tokens. At the same time, this approach highlights the core problem of using Git with Jupyter notebooks: the diffs often show large changes in the notebook file even when the actual code has only changed minimally.
+
+Overall, while Git can be used to version control Jupyter notebooks, the experience is generally worse compared to plain source code files. Tools such as ReviewNB or nbdime can improve notebook diffs. In professional workflows, outputs are often removed before committing notebooks to Git, and notebooks are mainly used for exploration and visualization, while the main logic is implemented in separate Python scripts. This workflow is also recommended in several best-practice blogs, such as Medium articles on Jupyter notebook best practices and the ReviewNB guide on version controlling notebooks.
+
+**References:**
+
+- https://www.reviewnb.com/git-jupyter-notebook-ultimate-guide
+- https://medium.com/@jaydeepdnai.imscit20/best-practices-for-jupyter-notebooks-b6118e21d152
 
