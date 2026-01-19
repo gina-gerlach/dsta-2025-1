@@ -10,10 +10,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the source code
 COPY src/ src/
-COPY train_and_save_wandb.py .
+COPY scripts/train_and_save_wandb.py .
 
 # Copy the entrypoint script
-COPY docker_entrypoint.sh .
+COPY docker/docker_entrypoint.sh .
 
 # Make the entrypoint script executable
 RUN chmod +x docker_entrypoint.sh

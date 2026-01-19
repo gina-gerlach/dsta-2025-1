@@ -13,7 +13,7 @@ RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy the source code and training script
 COPY src/ src/
-COPY train_and_save.py .
+COPY scripts/train_and_save.py .
 
 # Create directory for model persistence
 RUN mkdir -p /app/models

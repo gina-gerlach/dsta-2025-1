@@ -10,6 +10,8 @@
 
 **Milestone 4** focuses on using Weights & Biases for experiment tracking, analyzing model performance with Python data science tools, and exploring neural network modifications while maintaining reproducible and collaborative workflows.
 
+**Milestone 5** focuses on creating a Flask REST API for MNIST digit prediction, exposing the trained neural network as a web service that accepts base64-encoded images via POST requests and returns predictions, all running in a fully dockerized environment.
+
 ## Table of Contents
 * **Milestone 1:**
 - [1. Base Setup and Environment](#1-base-setup-and-environment)
@@ -73,6 +75,16 @@
   - [Results Summary](#results-summary)
   - [Technical Implementation](#technical-implementation)
   - [Version Controlling Jupyter Notebooks with Git – Experience and Challenges](#version-controlling-jupyter-notebooks-with-git-–-experience-and-challenges)
+
+* **Milestone 5:**
+- [Task 2: Flask REST API for MNIST Prediction](#task-2-flask-rest-api-for-mnist-prediction)
+  - [Architecture Overview](#architecture-overview-1)
+  - [REST Endpoint Design](#rest-endpoint-design)
+  - [Image Processing Pipeline](#image-processing-pipeline)
+  - [Docker Configuration](#docker-configuration)
+  - [Running the Application](#running-the-application-1)
+  - [Testing the API](#testing-the-api)
+  - [Example Client Code](#example-client-code)
 
 ---
 # Milestone 1
@@ -1552,4 +1564,337 @@ Overall, while Git can be used to version control Jupyter notebooks, the experie
 
 - https://www.reviewnb.com/git-jupyter-notebook-ultimate-guide
 - https://medium.com/@jaydeepdnai.imscit20/best-practices-for-jupyter-notebooks-b6118e21d152
+
+---
+# Milestone 5
+
+## Task 2: Flask REST API for MNIST Prediction
+
+Task 2 focuses on creating a Flask web application that exposes the trained MNIST neural network as a REST API. This enables external clients to send images and receive digit predictions, all within a fully dockerized environment.
+
+### Architecture Overview
+
+The application consists of three containerized services:
+
+1. **Training Service (`train`):** Runs once to train and save the MNIST model
+2. **PostgreSQL Service (`db`):** Stateful database server for storing images and predictions
+3. **Flask Application Service (`flask_app`):** REST API server exposing the `/predict` endpoint
+
+### REST Endpoint Design
+
+#### POST `/predict`
+
+**Request Format:**
+
+The endpoint accepts a JSON body with a base64-encoded image:
+
+```json
+{
+    "image": "<base64-encoded-image-string>",
+    "true_label": 7  // Optional: if the true label is known
+}
+```
+
+**Response Format:**
+
+```json
+{
+    "prediction": 7,
+    "confidence": 0.9987,
+    "probabilities": [0.0001, 0.0002, 0.0003, 0.0001, 0.0002, 0.0001, 0.0001, 0.9987, 0.0001, 0.0001],
+    "input_data_id": 1,
+    "prediction_id": 1
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prediction` | Integer | Predicted digit (0-9) |
+| `confidence` | Float | Confidence score (max probability) |
+| `probabilities` | Array[10] | Probability distribution for all digits |
+| `input_data_id` | Integer | Database ID of the stored input image |
+| `prediction_id` | Integer | Database ID of the stored prediction |
+
+#### GET `/health`
+
+Health check endpoint that returns `{"status": "healthy"}` with HTTP 200.
+
+### Image Processing Pipeline
+
+The Flask application processes incoming images through the following steps:
+
+1. **Base64 Decoding:** Remove optional data URL prefix and decode base64 string to bytes
+2. **Image Loading:** Open image using PIL (Pillow)
+3. **Grayscale Conversion:** Convert to grayscale ('L' mode) if necessary
+4. **Resizing:** Resize to 28×28 pixels using LANCZOS resampling
+5. **Normalization:** Scale pixel values from [0, 255] to [0, 1]
+6. **Reshaping:** Reshape to (28, 28, 1) for the CNN input
+
+```python
+def decode_base64_image(base64_string: str) -> np.ndarray:
+    # Remove data URL prefix if present
+    if ',' in base64_string:
+        base64_string = base64_string.split(',')[1]
+
+    # Decode and open image
+    image_bytes = base64.b64decode(base64_string)
+    image = Image.open(io.BytesIO(image_bytes))
+
+    # Convert to grayscale and resize
+    if image.mode != 'L':
+        image = image.convert('L')
+    if image.size != (28, 28):
+        image = image.resize((28, 28), Image.Resampling.LANCZOS)
+
+    # Normalize and reshape
+    image_array = np.array(image, dtype=np.float32) / 255.0
+    return image_array.reshape(28, 28, 1)
+```
+
+### Docker Configuration
+
+#### Dockerfile.flask
+
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir uv
+COPY requirements.txt .
+RUN uv pip install --system --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src/ src/
+COPY flask_app.py .
+
+# Create model directory and expose port
+RUN mkdir -p /app/models
+EXPOSE 5000
+
+CMD ["python", "flask_app.py"]
+```
+
+#### docker-compose.yml
+
+The Docker Compose configuration orchestrates all three services:
+
+```yaml
+version: '3.8'
+
+services:
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    container_name: milestone5_train
+    volumes:
+      - model_data:/app/models
+
+  db:
+    image: postgres:16-alpine
+    container_name: milestone5_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  flask_app:
+    build:
+      context: .
+      dockerfile: Dockerfile.flask
+    container_name: milestone5_flask
+    depends_on:
+      db:
+        condition: service_healthy
+      train:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    volumes:
+      - model_data:/app/models
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+  model_data:
+
+networks:
+  app_network:
+    driver: bridge
+```
+
+### Running the Application
+
+**Start the application:**
+
+```bash
+docker-compose up
+```
+
+This will:
+1. Train the MNIST model (first run only)
+2. Start the PostgreSQL database
+3. Start the Flask REST API server on port 5000
+
+**Run in detached mode:**
+
+```bash
+docker-compose up -d
+```
+
+**View logs:**
+
+```bash
+docker-compose logs flask_app
+```
+
+**Stop the application:**
+
+```bash
+docker-compose down
+```
+
+**Clean up (remove volumes):**
+
+```bash
+docker-compose down -v
+```
+
+### Testing the API
+
+#### Using curl
+
+```bash
+# Health check
+curl http://localhost:5000/health
+
+# Send a prediction request (example with a base64 image)
+curl -X POST http://localhost:5000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"image": "<base64-encoded-image>"}'
+```
+
+#### Using Python requests
+
+```python
+import requests
+import base64
+
+# Load and encode an image
+with open("digit_image.png", "rb") as f:
+    image_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+# Send prediction request
+response = requests.post(
+    "http://localhost:5000/predict",
+    json={"image": image_base64}
+)
+
+result = response.json()
+print(f"Predicted digit: {result['prediction']}")
+print(f"Confidence: {result['confidence']:.2%}")
+```
+
+### Example Client Code
+
+A complete example can be run with the file (`test_flask_api.py`) which will:
+1. Load an MNIST sample image
+2. Encode it as base64
+3. Send it to the REST API
+4. Display the prediction result
+
+```python
+"""
+Example client script for testing the Flask REST API.
+"""
+import requests
+import base64
+import numpy as np
+from PIL import Image
+import io
+
+def load_mnist_sample():
+    """Load a sample from the MNIST dataset."""
+    from tensorflow import keras
+    (_, _), (x_test, y_test) = keras.datasets.mnist.load_data()
+    return x_test[0], y_test[0]
+
+def image_to_base64(image_array: np.ndarray) -> str:
+    """Convert a numpy array to base64 string."""
+    # Scale to 0-255 and convert to PIL Image
+    img = Image.fromarray((image_array * 255).astype(np.uint8))
+
+    # Save to bytes buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    # Encode to base64
+    return base64.b64encode(buffer.read()).decode('utf-8')
+
+def main():
+    # Load a sample image
+    image, true_label = load_mnist_sample()
+    print(f"True label: {true_label}")
+
+    # Normalize and encode
+    image_normalized = image / 255.0
+    image_base64 = image_to_base64(image_normalized)
+
+    # Send request to Flask API
+    response = requests.post(
+        "http://localhost:5000/predict",
+        json={
+            "image": image_base64,
+            "true_label": int(true_label)
+        }
+    )
+
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Prediction: {result['prediction']}")
+        print(f"Confidence: {result['confidence']:.2%}")
+        print(f"Correct: {result['prediction'] == true_label}")
+    else:
+        print(f"Error: {response.json()}")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Database Storage
+
+Each prediction request stores data in two database tables:
+
+**input_data table:**
+- Image data (serialized as BYTEA)
+- True label (if provided, otherwise -1)
+- Image shape metadata
+- Timestamp
+
+**predictions table:**
+- Foreign key to input_data
+- Predicted label
+- Confidence score
+- Full probability distribution
+- Timestamp
+
+This allows for later analysis of prediction accuracy and model performance over time.
+
+## Task 3: Front-end
 
