@@ -1,16 +1,16 @@
 # Milestone Report
 **Course:** Data Science Toolkits and Architectures  
 **Authors:** Gina Gerlach & Sven Regli  
+
 **Milestone 1** focuses on setting up the development environment, retrieving and running a deep learning model using the MNIST dataset, ensuring reproducibility, and establishing proper Git-based collaboration workflows.
 
 **Milestone 2** focuses on improving project structure and dependency management, enforcing clean and reproducible development workflows through proper Git practices, virtual environments, and Docker, while expanding the codebase to support modular design, model training, saving/loading, and predictable cross-machine execution.
-**Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 **Milestone 3** focuses on multi-container Docker applications with PostgreSQL database integration, including image data serialization, relational database design, and container orchestration using Docker Compose with proper health checks and volume persistence.
 
 **Milestone 4** focuses on using Weights & Biases for experiment tracking, analyzing model performance with Python data science tools, and exploring neural network modifications while maintaining reproducible and collaborative workflows.
 
-**Milestone 5** focuses on creating a Flask REST API for MNIST digit prediction, exposing the trained neural network as a web service that accepts base64-encoded images via POST requests and returns predictions, all running in a fully dockerized environment.
+**Milestone 5** creates a Flask REST API for MNIST digit prediction that accepts base64-encoded images via POST requests and returns predictions, while also providing a web front-end for users to upload images. All services—including the training service, PostgreSQL database, and Flask API—run in Docker, enabling predictions to be processed, displayed, and logged seamlessly.
 
 ## Table of Contents
 * **Milestone 1:**
@@ -85,6 +85,8 @@
   - [Running the Application](#running-the-application-1)
   - [Testing the API](#testing-the-api)
   - [Example Client Code](#example-client-code)
+- [Task 3: Front-end Development](#task-3-front-end-development)
+- [Issues and how they were solved](#issues-and-how-they-were-solved)
 
 ---
 # Milestone 1
@@ -1896,5 +1898,140 @@ Each prediction request stores data in two database tables:
 
 This allows for later analysis of prediction accuracy and model performance over time.
 
-## Task 3: Front-end
+## Task 3: Front-end Development
 
+To create the front-end webpage, the Flask application and its dependencies were launched using Docker Compose. The training service ran once to generate the MNIST model, the PostgreSQL database was initialized, and the `Flask REST API` was started and exposed on `port 5001` to avoid conflicts with host services. The application’s readiness was confirmed by monitoring the container logs and verifying the health endpoint at http://localhost:5001/health, which returned a successful response. At this point, the environment was fully prepared for front-end development.
+
+The project structure was updated by creating the `templates/` directory in the `scripts/` folder alongside `flask_app.py`, allowing Flask to automatically locate the HTML templates. A new `upload.html` template was created, providing a form for users to select and submit image files. In `flask_app.py`, imports were added for template rendering, file handling, and image processing, including render_template, request, redirect, secure_filename, PIL.Image, numpy, base64, and BytesIO.
+
+Two new routes were implemented: a `GET / route` to render the upload page, and a `POST /upload` route to handle submitted files. Uploaded images are validated against allowed extensions, converted to grayscale, resized to 28×28 pixels, normalized, and reshaped to match the input shape of the existing convolutional neural network. The /upload route then calls the internal /predict endpoint by sending the preprocessed image as a base64-encoded JSON payload. The response containing the predicted digit, confidence score, and associated database IDs is parsed and passed back to `upload.html`, allowing the user to view the prediction alongside the uploaded image.
+
+The Dockerfile.flask was updated to copy the entire `scripts/` directory into the container, ensuring that both the Flask application code and templates are included. After rebuilding the Flask image and restarting the containers, the upload page became accessible in the browser at http://localhost:5001/, fully integrated with the prediction pipeline and database logging. This setup provides a reproducible environment, allowing the application to be replicated by cloning the repository, building the Docker containers, and accessing the front-end through the specified host port.
+
+## Issues and how they were solved
+
+### Project Reorganization
+
+During Milestone 5, we reorganized the project structure for better maintainability:
+
+```
+dsta-2025-1/
+├── docker/                      # All Docker-related files
+│   ├── Dockerfile.db
+│   ├── Dockerfile.flask
+│   ├── Dockerfile.train
+│   ├── Dockerfile.wandb
+│   └── docker_entrypoint.sh
+├── scripts/                     # Executable scripts
+│   ├── db_app.py
+│   ├── flask_app.py
+│   ├── main.py
+│   ├── postgres_jokes.py
+│   ├── train_and_save.py
+│   ├── train_and_save_wandb.py
+│   └── templates/
+│   	└── upload.html
+├── src/                         # Reusable library modules
+│   ├── create_model.py
+│   ├── db_helper.py
+│   ├── load_data.py
+│   ├── model_io.py
+│   ├── predict.py
+│   └── train_model.py
+├── tests/                       # Test files
+│   └── test_flask_api.py
+├── notebooks/
+├── report/
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
+
+This separation makes it clearer which files are executable scripts versus reusable library code, and centralizes all Docker configuration in one place.
+
+### Challenges and Solutions
+
+During the implementation of Milestone 5, we encountered several challenges:
+
+*1. Base64 Image Decoding Issues*
+
+Problem: Initially, the Flask endpoint failed to properly decode images sent from different clients. Some clients sent raw base64 strings while others included the data URL prefix (e.g., ⁠ data:image/png;base64,... ⁠).
+
+Solution: We added preprocessing logic to strip the data URL prefix if present before decoding:
+⁠ python
+if ',' in base64_string:
+    base64_string = base64_string.split(',')[1]
+ ⁠
+
+*2. Image Format and Size Mismatch*
+
+Problem: The neural network expects 28×28 grayscale images normalized to [0, 1], but users might send images in different sizes, color modes (RGB), or value ranges.
+
+Solution: We implemented a robust image processing pipeline using PIL that:
+•⁠  ⁠Converts any color mode to grayscale ('L')
+•⁠  ⁠Resizes to exactly 28×28 pixels using LANCZOS resampling
+•⁠  ⁠Normalizes pixel values from [0, 255] to [0, 1]
+
+*3. Docker Service Startup Order*
+
+Problem: The Flask application would crash on startup because it tried to connect to the database before PostgreSQL was fully ready, even with ⁠ depends_on ⁠ specified.
+
+Solution: We used Docker Compose health checks with ⁠ condition: service_healthy ⁠:
+⁠ yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+flask_app:
+  depends_on:
+    db:
+      condition: service_healthy
+ ⁠
+
+Additionally, we implemented application-level retry logic as a fallback safety measure.
+
+*4. Model Not Found in Container*
+
+Problem: The Flask container could not find the trained model because it was stored in a volume that wasn't properly shared between the training and Flask containers.
+
+Solution: We ensured both containers mount the same named volume (⁠ model_data ⁠) and that the Flask container waits for the training service to complete:
+⁠ yaml
+train:
+  condition: service_completed_successfully
+ ⁠
+
+*5. Database Connection String Hardcoding*
+
+Problem: The database hostname ⁠ db ⁠ only works inside the Docker network. Running scripts locally for testing required different connection parameters.
+
+Solution: While the current implementation uses hardcoded values for simplicity within Docker, a production setup would use environment variables to configure the database connection, allowing the same code to run both locally and in containers.
+
+*6. Project Structure Became Disorganized*
+
+Problem: As the project grew across milestones, the root directory became cluttered with multiple Dockerfiles, Python scripts, and configuration files, making it harder to navigate and maintain.
+
+Solution: We reorganized the project into a cleaner structure:
+•⁠  ⁠⁠ docker/ ⁠ for all Docker-related files
+•⁠  ⁠⁠ scripts/ ⁠ for executable Python scripts
+•⁠  ⁠⁠ tests/ ⁠ for test files
+•⁠  ⁠⁠ src/ ⁠ for reusable library modules
+
+This required updating all Dockerfile ⁠ COPY ⁠ commands and ⁠ docker-compose.yml ⁠ references to point to the new locations.
+
+*6. Port Conflict*
+A port conflict was encountered when starting the Flask container because port 5000 on when the host machine was a Mac. On Mac, port 5000 is already in use by a macOS system service (Control Center) - so Docker was unable to bind the container to port. To fix the issue, the host port mapping in the `docker-compose.yml` file was updated to an alternative free port (5001) to port 5000 inside the container. After restarting Docker Compose, the Flask application started successfully and was accessible via the updated local port.
+
+### Key Learnings
+
+1.⁠ ⁠*REST API Design:* Flask provides a simple way to expose ML models as web services, but input validation and error handling are critical for robustness.
+
+2.⁠ ⁠*Image Processing:* Base64 encoding allows images to be transmitted as JSON, but the server must handle various input formats gracefully.
+
+3.⁠ ⁠*Container Orchestration:* Docker Compose health checks are essential for reliable multi-container startup, but application-level retries provide additional safety.
+
+4.⁠ ⁠*Data Persistence:* Both model artifacts and predictions should be stored for reproducibility and later analysis.
+
+5.⁠ ⁠*Project Organization:* A well-structured project with clear separation of concerns makes development and maintenance significantly easier as the codebase grows.

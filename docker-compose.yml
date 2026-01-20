@@ -49,8 +49,8 @@ services:
         # Wait for model training to complete
         condition: service_completed_successfully
     ports:
-      # Expose Flask on port 5000
-      - "5000:5000"
+      # Expose Flask on port 5001 - Port changed to accommodate Mac users
+      - "5001:5000"
     volumes:
       # Volume to access trained model
       - model_data:/app/models

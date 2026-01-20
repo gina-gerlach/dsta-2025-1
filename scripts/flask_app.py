@@ -7,13 +7,19 @@ This script provides a REST API endpoint for MNIST digit prediction:
 - Runs prediction using the trained neural network
 - Saves image and prediction to the database
 - Returns the prediction to the client
+
+Additionally, this version includes a front-end upload page at /
+with a form to upload images for prediction.
 """
 import time
 import base64
 import io
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from PIL import Image
+from werkzeug.utils import secure_filename
+import requests
+
 from src.model_io import load_model
 from src.db_helper import (
     create_database,
@@ -29,15 +35,16 @@ app = Flask(__name__)
 model = None
 db_conn = None
 
+# Allowed file types for upload
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp"}
+
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def wait_for_db(max_retries: int = 30, retry_delay: int = 2):
-    """
-    Wait for the database to be ready.
-
-    Args:
-        max_retries: Maximum number of connection attempts
-        retry_delay: Seconds to wait between retries
-    """
+    """Wait for the database to be ready."""
     import psycopg2
     conn_params = {
         'host': 'db',
@@ -56,7 +63,7 @@ def wait_for_db(max_retries: int = 30, retry_delay: int = 2):
             conn.close()
             print("Database is ready!")
             return True
-        except Exception as e:
+        except Exception:
             print(f"Waiting for database... (attempt {attempt + 1}/{max_retries})")
             time.sleep(retry_delay)
 
@@ -114,31 +121,20 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
     Decode a base64-encoded image to a numpy array.
     Numpy array of shape (28, 28, 1) normalized to [0, 1]
     """
-    # Remove data URL prefix if present (e.g., "data:image/png;base64,")
     if ',' in base64_string:
         base64_string = base64_string.split(',')[1]
 
-    # Decode base64 to bytes
     image_bytes = base64.b64decode(base64_string)
-
-    # Open image with PIL
     image = Image.open(io.BytesIO(image_bytes))
 
-    # Convert to grayscale 
     if image.mode != 'L':
         image = image.convert('L')
 
-    # Resize to 28x28 
     if image.size != (28, 28):
         image = image.resize((28, 28), Image.Resampling.LANCZOS)
 
-    # Convert to numpy array
     image_array = np.array(image, dtype=np.float32)
-
-    # Normalize to [0, 1]
     image_array = image_array / 255.0
-
-    # Reshape to (28, 28, 1)
     image_array = image_array.reshape(28, 28, 1)
 
     return image_array
@@ -146,44 +142,26 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """
-    REST endpoint for MNIST digit prediction.
-    """
+    """REST endpoint for MNIST digit prediction."""
     global model, db_conn
 
     try:
         data = request.get_json()
 
         if not data or 'image' not in data:
-            return jsonify({
-                'error': 'Missing "image" field in request body'
-            }), 400
+            return jsonify({'error': 'Missing "image" field in request body'}), 400
 
-        # Decode the base64 image
         try:
             image_array = decode_base64_image(data['image'])
         except Exception as e:
-            return jsonify({
-                'error': f'Failed to decode image: {str(e)}'
-            }), 400
+            return jsonify({'error': f'Failed to decode image: {str(e)}'}), 400
 
-        # Get optional true label (default to -1 if unknown)
         true_label = data.get('true_label', -1)
-
-        # Save image to database
         input_data_id = insert_input_data(db_conn, image_array, int(true_label))
-
-        # Prepare for prediction (add batch dimension)
         prediction_input = image_array.reshape(1, 28, 28, 1)
-
-        # Run prediction
         prediction_probs = model.predict(prediction_input, verbose=0)
-
-        # Extract results
         predicted_label = int(prediction_probs[0].argmax())
         confidence = float(prediction_probs[0].max())
-
-        # Save prediction to database
         prediction_id = insert_prediction(
             db_conn,
             input_data_id=input_data_id,
@@ -192,7 +170,6 @@ def predict():
             prediction_probabilities=prediction_probs[0]
         )
 
-        # Return response
         response = {
             'prediction': predicted_label,
             'confidence': confidence,
@@ -202,13 +179,10 @@ def predict():
         }
 
         print(f"Prediction: {predicted_label} (confidence: {confidence:.4f})")
-
         return jsonify(response), 200
 
     except Exception as e:
-        return jsonify({
-            'error': f'Prediction failed: {str(e)}'
-        }), 500
+        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
 
 
 @app.route('/health', methods=['GET'])
@@ -217,7 +191,55 @@ def health():
     return jsonify({'status': 'healthy'}), 200
 
 
+# --- FRONT-END ROUTES ---
+
+@app.route("/", methods=["GET"])
+def index():
+    """Render the upload page."""
+    return render_template("upload.html")
+
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    """Handle uploaded images from the front-end."""
+    if "image" not in request.files:
+        return redirect(request.url)
+
+    file = request.files["image"]
+
+    if file.filename == "" or not allowed_file(file.filename):
+        return redirect(request.url)
+
+    # Preprocess image
+    image = Image.open(file).convert("L").resize((28, 28))
+    image_array = np.array(image, dtype=np.float32) / 255.0
+    image_array = image_array.reshape(28, 28, 1)
+
+    # Convert image to base64 for /predict
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    # Call /predict internally
+    response = requests.post("http://localhost:5000/predict", json={"image": img_str})
+    if response.status_code == 200:
+        data = response.json()
+        prediction = data["prediction"]
+        confidence = data.get("confidence")
+    else:
+        prediction = "Error"
+        confidence = None
+
+    image_data = img_str
+
+    return render_template(
+        "upload.html",
+        prediction=prediction,
+        confidence=confidence,
+        image_data=image_data
+    )
+
+
 if __name__ == '__main__':
     initialize_app()
-    # Run Flask server
     app.run(host='0.0.0.0', port=5000, debug=False)

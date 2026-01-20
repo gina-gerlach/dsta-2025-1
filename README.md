@@ -3,32 +3,44 @@
 **Course:** Data Science Toolkits and Architectures
 **Authors:** Gina Gerlach & Sven Regli
 
-This project demonstrates a complete machine learning workflow for training a **Convolutional Neural Network (CNN)** to recognize handwritten digits (0–9) from the MNIST dataset, achieving around 99% test accuracy. The project showcases Docker containerization, PostgreSQL database integration, and multi-container orchestration using Docker Compose.
+This project demonstrates a complete machine learning workflow for training a **Convolutional Neural Network (CNN)** to recognize handwritten digits (0–9) from the MNIST dataset, achieving around 99% test accuracy. The project showcases **Docker containerization, PostgreSQL database integration, Flask REST API**, and a **front-end webpage** for image upload and prediction.
 
 ## Project Structure
 ```
 dsta-2025-1/
-├── .dockerignore
-├── .gitignore
-├── docker-compose.yml          # Multi-container orchestration
-├── Dockerfile                  # Original single-container setup
-├── Dockerfile.train            # Model training container
-├── Dockerfile.db               # Database application container
-├── main.py                     # Standalone training script
-├── db_app.py                   # Database integration application
-├── README.md
-├── requirements.txt
-├── report/
-│   └── report.md              # Comprehensive milestone documentation
-└── src/
+├── docker/                      # All Docker-related files
+│   ├── Dockerfile.db
+│   ├── Dockerfile.flask
+│   ├── Dockerfile.train
+│   ├── Dockerfile.wandb
+│   └── docker_entrypoint.sh
+├── scripts/                     # Executable scripts
+│   ├── db_app.py
+│   ├── flask_app.py
+│   ├── main.py
+│   ├── postgres_jokes.py
+│   ├── train_and_save.py
+│   ├── train_and_save_wandb.py
+│   └── templates/
+│   	└── upload.html               # Front-end upload page
+├── src/                         # Reusable library modules
     ├── __init__.py
-    ├── create_model.py         # CNN architecture definition
-    ├── load_data.py            # MNIST data loading and preprocessing
-    ├── model_io.py             # Model saving/loading utilities
-    ├── predict.py              # Inference functions
-    ├── train_model.py          # Training orchestration
-    ├── db_helper.py            # PostgreSQL database utilities
-    └── postgres_jokes.py       # PostgreSQL testing script
+    ├── create_model.py             # CNN architecture definition
+    ├── load_data.py                # MNIST data loading and preprocessing
+    ├── model_io.py                 # Model saving/loading utilities
+    ├── predict.py                  # Inference functions
+    ├── train_model.py              # Training orchestration
+    ├── db_helper.py                # PostgreSQL database utilities
+    └── postgres_jokes.py           # PostgreSQL testing script
+├── tests/                       # Test files
+│   └── test_flask_api.py
+├── notebooks/
+├── report/
+│   └── report.md                # Comprehensive milestone documentation
+├── docker-compose.yml           # Multi-container orchestration
+├── requirements.txt
+└── README.md
+
 ```
 ## Requirements
 
@@ -43,7 +55,8 @@ dsta-2025-1/
 The complete application uses Docker Compose to orchestrate three services:
 1. **PostgreSQL Database** - Persistent data storage
 2. **Model Training** - Trains and saves the CNN model
-3. **Python Application** - Loads data, makes predictions, and stores results in the database
+3. **Flask REST API** - Exposes the prediction API
+4. **Front-End Webpage** - Upload images and view predictions
 
 ### 1. Clone the Repository
 
@@ -55,20 +68,20 @@ cd dsta-2025-1
 ### 2. Run with Docker Compose
 
 ```bash
-docker-compose up
+docker-compose up --build
 ```
 
 **What happens:**
 - PostgreSQL database starts with health checks
-- Model training service trains the CNN and saves it to a Docker volume
-- Application service:
-  - Waits for database to be healthy and model to be trained
-  - Creates `milestone_3` database with `input_data` and `predictions` tables
-  - Loads a sample MNIST image
-  - Serializes and stores the image in the database (as BYTEA)
-  - Retrieves and deserializes the image
-  - Makes a prediction using the trained model
-  - Stores the prediction with a foreign key reference to the input data
+- Model training service runs once to generate the MNIST model
+- Flask container:
+  - Waits for the database to be ready and the model to be trained
+  - Starts the REST API (port 5001)
+  - Serves the front-end at http://localhost:5001/
+- Front-end webpage:
+- Users can upload images (PNG, JPG)
+- Images are converted to grayscale, resized to 28×28, normalized
+- Prediction results, confidence score, and database IDs are displayed
 
 ### 3. Clean Up
 
@@ -88,6 +101,7 @@ For detailed documentation, see [report/report.md](report/report.md), which incl
 - Architectural decisions and rationale
 - Database schema and ER diagrams
 - Docker Compose configuration explanations
+- Flask API and front-end implementation details
 - Conceptual questions and answers
 
 ---
