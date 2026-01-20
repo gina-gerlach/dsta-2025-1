@@ -2,18 +2,18 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install uv once, globally
+# Install uv for faster dependency installation
 RUN pip install --no-cache-dir uv
 
-# Copy reuirements.txt for caching
+# Copy requirements.txt for caching
 COPY requirements.txt .
 
-# Install deps into the system Python inside the container
+# Install dependencies into the system Python inside the container
 RUN uv pip install --system --no-cache-dir -r requirements.txt
 
-# Copy  the source  code and main.py
+# Copy the source code and application scripts
 COPY src/ src/
-COPY main.py .
+COPY scripts/db_app.py .
 
 # Create directory for model persistence
 RUN mkdir -p /app/models
@@ -21,4 +21,5 @@ RUN mkdir -p /app/models
 # Set the volume mount point
 VOLUME ["/app/models"]
 
-CMD ["python", "main.py"]
+# Run the database application
+CMD ["python", "db_app.py"]

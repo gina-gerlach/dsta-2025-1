@@ -5,8 +5,8 @@ services:
   train:
     build:
       context: .
-      dockerfile: Dockerfile.train
-    container_name: milestone3_train
+      dockerfile: docker/Dockerfile.train
+    container_name: milestone5_train
     volumes:
       # Volume to persist trained model
       - model_data:/app/models
@@ -16,7 +16,7 @@ services:
   # PostgreSQL Database Service
   db:
     image: postgres:16-alpine
-    container_name: milestone3_postgres
+    container_name: milestone5_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -35,12 +35,12 @@ services:
     networks:
       - app_network
 
-  # Python Application Service
-  app:
+  # Flask REST API Application Service
+  flask_app:
     build:
       context: .
-      dockerfile: Dockerfile.db
-    container_name: milestone3_app
+      dockerfile: docker/Dockerfile.flask
+    container_name: milestone5_flask
     depends_on:
       db:
         # Wait for database to be healthy before starting app
@@ -48,13 +48,16 @@ services:
       train:
         # Wait for model training to complete
         condition: service_completed_successfully
+    ports:
+      # Expose Flask on port 5001 - Port changed to accommodate Mac users
+      - "5001:5000"
     volumes:
-      # Volume to persist trained model
+      # Volume to access trained model
       - model_data:/app/models
     environment:
       # Database connection settings
       DB_HOST: db
-      DB_NAME: milestone_3
+      DB_NAME: milestone_5
       DB_USER: postgres
       DB_PASSWORD: postgres
       MODEL_DIR: /app/models
@@ -64,9 +67,9 @@ services:
 # Named volumes for data persistence
 volumes:
   postgres_data:
-    # This volume persists the PostgreSQL database
+    # PostgreSQL database
   model_data:
-    # This volume persists the trained neural network model
+    # trained neural network model
 
 # Network for inter-container communication
 networks:
